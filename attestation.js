@@ -49,8 +49,8 @@ function readOrAssignReceivingAddress(device_address, user_address, cb){
 			rows => {
 				if (rows.length > 0){
 					let row = rows[0];
-					if (row.price_ts < Date.now()/1000 - 3600)
-						row.post_publicly = null;
+				//	if (row.price_ts < Date.now()/1000 - 3600)
+				//		row.post_publicly = null;
 					cb(row.receiving_address, row.post_publicly);
 					return unlock();
 				}
