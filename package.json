@@ -1,0 +1,24 @@
+{
+  "name": "real-name-attestation",
+  "version": "1.0.0",
+  "description": "A bot for attestation of real names through Jumio",
+  "main": "attestation.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "tony",
+  "license": "MIT",
+  "dependencies": {
+    "async": "^2.5.0",
+    "body-parser": "^1.18.2",
+    "byteballcore": "git+https://github.com/byteball/byteballcore.git",
+    "emailjs": "^1.0.10",
+    "express": "^4.16.2",
+    "headless-byteball": "git+https://github.com/byteball/headless-byteball.git",
+    "byteball-witness": "git+https://github.com/byteball/byteball-witness.git",
+    "i18n-iso-countries": "^3.3.0",
+    "maxmind": "^2.4.0",
+    "moment": "^2.18.1",
+    "request": "^2.81.0"
+  }
+}
