@@ -124,7 +124,7 @@ function postAttestation(attestor_address, payload, onDone){
 			}
 		})
 	};
-	if (conf.bPostTimestamp){
+	if (conf.bPostTimestamp && attestor_address === assocAttestorAddresses['real name']){
 		let timestamp = Date.now();
 		let datafeed = {timestamp: timestamp};
 		let objTimestampMessage = {
