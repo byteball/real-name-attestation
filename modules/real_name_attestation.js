@@ -96,6 +96,12 @@ function hideProfile(profile){
 }
 
 function postAttestation(attestor_address, payload, onDone){
+	function onError(err){
+		notifications.notifyAdmin("attestation failed", err);
+		onDone(err);
+	}
+	var network = require('byteballcore/network.js');
+	var composer = require('byteballcore/composer.js');
 	let headlessWallet = require('headless-byteball');
 	let objMessage = {
 		app: "attestation",
@@ -103,16 +109,33 @@ function postAttestation(attestor_address, payload, onDone){
 		payload_hash: objectHash.getBase64Hash(payload),
 		payload: payload
 	};
-	let opts = {
-		paying_addresses: [attestor_address],
-		change_address: attestor_address,
-		messages: [objMessage]
+	
+	let params = {
+		paying_addresses: [attestor_address], 
+		outputs: [{address: attestor_address, amount: 0}],
+		messages: [objMessage],
+		signer: headlessWallet.signer, 
+		callbacks: composer.getSavingCallbacks({
+			ifNotEnoughFunds: onError,
+			ifError: onError,
+			ifOk: function(objJoint){
+				network.broadcastJoint(objJoint);
+				onDone(null, objJoint.unit.unit);
+			}
+		})
 	};
-	headlessWallet.sendMultiPayment(opts, (err, unit) => {
-		if (err)
-			notifications.notifyAdmin("attestation failed", err);
-		onDone(err, unit);
-	});
+	if (conf.bPostTimestamp){
+		let timestamp = Date.now();
+		let datafeed = {timestamp: timestamp};
+		let objTimestampMessage = {
+			app: "data_feed",
+			payload_location: "inline",
+			payload_hash: objectHash.getBase64Hash(datafeed),
+			payload: datafeed
+		};
+		params.messages.push(objTimestampMessage);
+	}
+	composer.composeJoint(params);
 }
 
 function postAndWriteAttestation(transaction_id, attestation_type, attestor_address, attestation_payload, src_profile){
