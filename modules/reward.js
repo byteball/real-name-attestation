@@ -37,6 +37,8 @@ function sendAndWriteReward(reward_type, transaction_id){
 			WHERE transaction_id=?", 
 			[transaction_id], 
 			rows => {
+				if (rows.length === 0)
+					throw Error("no record in "+table+" for tx "+transaction_id);
 				let row = rows[0];
 				if (row.reward_date) // already sent
 					return unlock();
