@@ -32,7 +32,7 @@ function initAndWriteScan(transaction_id, device_address, user_address, onDone){
 							onDone();
 					}
 				);
-				device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url);
+				device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nThe link is valid only for 30 minutes.\n\nAfter you are done making photos of your ID and your face, Jumio will take some time to process the images, usually minutes but occasionally hours.  We'll message you only when the final outcome is known.");
 			});
 		});
 	});
