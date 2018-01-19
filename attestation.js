@@ -444,10 +444,10 @@ eventBus.once('headless_wallet_ready', () => {
 					server.listen(conf.webPort);
 
 					setInterval(jumio.retryInitScans, 60*1000);
-					setInterval(realNameAttestation.retryPostingAttestations, 6*1000);
-					setInterval(reward.retrySendingRewards, 6*1000);
-					setInterval(pollAndHandleJumioScanData, 10*1000);
-					setInterval(moveFundsToAttestorAddresses, 10*1000);
+					setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
+					setInterval(reward.retrySendingRewards, 10*1000);
+					setInterval(pollAndHandleJumioScanData, 60*1000);
+					setInterval(moveFundsToAttestorAddresses, 60*1000);
 				});
 			});
 		});
