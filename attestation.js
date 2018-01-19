@@ -197,7 +197,7 @@ function handleJumioData(transaction_id, body){
 						[transaction_id, row.user_address, attestation.profile.user_id, rewardInBytes], 
 						(res) => {
 							console.log("reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-							if (!res.insertId)
+							if (!res.affectedRows)
 								return console.log("duplicate user_address or user_id: "+row.user_address+", "+attestation.profile.user_id);
 							device.sendMessageToDevice(row.device_address, 'text', "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.");
 							reward.sendAndWriteReward('attestation', transaction_id);
@@ -214,7 +214,8 @@ function handleJumioData(transaction_id, body){
 										row.user_address, attestation.profile.user_id, 
 										referralRewardInBytes], 
 										(res) => {
-											if (!res.insertId)
+											console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+											if (!res.affectedRows)
 												return notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
 											device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
 											reward.sendAndWriteReward('referral', transaction_id);
