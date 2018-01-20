@@ -369,7 +369,7 @@ eventBus.once('headless_and_rates_ready', () => {
 					checkPayment((error, delay) => {
 						if (error){
 							return db.query(
-								"INSERT INTO rejected_payments (receiving_address, price, received_amount, delay, payment_unit, error) \n\
+								"INSERT "+db.getIgnore()+" INTO rejected_payments (receiving_address, price, received_amount, delay, payment_unit, error) \n\
 								VALUES (?,?, ?,?, ?,?)", 
 								[row.receiving_address, row.price, row.amount, delay, row.unit, error],
 								() => {
