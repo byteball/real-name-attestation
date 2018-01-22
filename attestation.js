@@ -157,6 +157,8 @@ function handleJumioData(transaction_id, body){
 	let data = body.transaction ? jumioApi.convertRestResponseToCallbackFormat(body) : body;
 	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
 	let bHasLatNames = (scan_result && data.idFirstName && data.idLastName && data.idFirstName !== 'N/A' && data.idLastName !== 'N/A');
+	if (bHasLatNames && data.idCountry === 'RUS' && data.idType === 'ID_CARD') // Russian internal passport
+		bHasLatNames = false;
 	let bNoLatNames = (scan_result && !bHasLatNames);
 	if (!bHasLatNames)
 		scan_result = 0;
