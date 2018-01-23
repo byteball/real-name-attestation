@@ -156,12 +156,18 @@ function handleJumioData(transaction_id, body){
 	let device = require('byteballcore/device.js');
 	let data = body.transaction ? jumioApi.convertRestResponseToCallbackFormat(body) : body;
 	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
+	let error = scan_result ? '' : data.verificationStatus;
 	let bHasLatNames = (scan_result && data.idFirstName && data.idLastName && data.idFirstName !== 'N/A' && data.idLastName !== 'N/A');
 	if (bHasLatNames && data.idCountry === 'RUS' && data.idType === 'ID_CARD') // Russian internal passport
 		bHasLatNames = false;
-	let bNoLatNames = (scan_result && !bHasLatNames);
-	if (!bHasLatNames)
+	if (scan_result && !bHasLatNames){
 		scan_result = 0;
+		error = "couldn't extract your name.  Please [try again](command:again) and provide a document with your name printed in Latin characters.";
+	}
+	if (scan_result && !data.identityVerification.validity){ // selfie check and selfie match
+		scan_result = 0;
+		error = data.identityVerification.reason;
+	}
 	db.query(
 		"UPDATE transactions SET scan_result=?, result_date="+db.getNow()+", extracted_data=? \n\
 		WHERE transaction_id=? AND scan_result IS NULL", 
@@ -173,9 +179,6 @@ function handleJumioData(transaction_id, body){
 		rows => {
 			let row = rows[0];
 			if (scan_result === 0){
-				let error = bNoLatNames 
-					? "couldn't extract your name.  Please [try again](command:again) and provide a document with your name printed in Latin characters." 
-					: data.verificationStatus;
 				return device.sendMessageToDevice(row.device_address, 'text', "Verification failed: "+error+"\n\nTry [again](command:again)?");
 			}
 			let bNonUS = (data.idCountry !== 'USA');

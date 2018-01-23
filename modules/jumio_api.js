@@ -83,7 +83,7 @@ function initScan(user_address, scanReference, onDone){
 }
 
 function convertRestResponseToCallbackFormat(body){
-	return {
+	let data = {
 		idScanStatus: body.transaction.status,
 		verificationStatus: body.document.status,
 		idFirstName: body.document.firstName,
@@ -97,6 +97,9 @@ function convertRestResponseToCallbackFormat(body){
 		idSubtype: body.document.idSubtype,
 		clientIp: body.transaction.clientIp
 	};
+	if (body.verification)
+		data.identityVerification = body.verification.identityVerification;
+	return data;
 }
 
 exports.initScan = initScan;
