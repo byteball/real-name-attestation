@@ -386,7 +386,7 @@ eventBus.once('headless_and_rates_ready', () => {
 							"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
 							[row.receiving_address, row.price, row.amount, row.unit]
 						);
-						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation");
+						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation.  It should take 5-10 minutes.");
 					});
 				});
 			}
