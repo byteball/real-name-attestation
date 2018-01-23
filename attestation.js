@@ -155,6 +155,8 @@ function getCountryByIp(ip){
 function handleJumioData(transaction_id, body){
 	let device = require('byteballcore/device.js');
 	let data = body.transaction ? jumioApi.convertRestResponseToCallbackFormat(body) : body;
+	if (typeof data.identityVerification === 'string') // contrary to docs, it is a string, not an object
+		data.identityVerification = JSON.parse(data.identityVerification);
 	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
 	let error = scan_result ? '' : data.verificationStatus;
 	let bHasLatNames = (scan_result && data.idFirstName && data.idLastName && data.idFirstName !== 'N/A' && data.idLastName !== 'N/A');
