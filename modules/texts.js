@@ -32,6 +32,10 @@ exports.underWay = () => {
 	return "Received your payment and your attestation is under way.  Please wait, we'll notify you when it is finished.";
 };
 
+exports.switchToSingleAddress = () => {
+	return "Make sure you are in a single-address wallet, otherwise switch to a single-address wallet or create one and send me your address before paying.";
+};
+
 exports.alreadyAttested = (attestation_date) => {
 	return "You were already attested at "+attestation_date+" UTC.  Attest [again](command: again)?";
 };
