@@ -277,7 +277,7 @@ function respond(from_address, text, response){
 				if (post_publicly === null)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again')
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, post_publicly));
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly));
 				db.query(
 					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
 					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
@@ -285,7 +285,7 @@ function respond(from_address, text, response){
 					[receiving_address], 
 					rows => {
 						if (rows.length === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, post_publicly));
+							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly));
 						let row = rows[0];
 						let scan_result = row.scan_result;
 						if (scan_result === null)
@@ -362,7 +362,7 @@ eventBus.once('headless_and_rates_ready', () => {
 							text += bLate 
 								? ".  Your payment is too late and less than the current price.  " 
 								: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
-							return onDone(text + texts.pleasePay(row.receiving_address, current_price), delay);
+							return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address), delay);
 						}
 						db.query("SELECT address FROM unit_authors WHERE unit=?", [row.unit], author_rows => {
 							if (author_rows.length !== 1){

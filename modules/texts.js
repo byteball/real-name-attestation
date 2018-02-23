@@ -16,12 +16,12 @@ exports.attestNonUS = () => {
 	return "You are a non-US citizen.  Do you want this fact to be also attested?  This information will be public, i.e. everybody will be able to see that your Byteball address belongs to a non-US citizen, but nothing else will be disclosed.\n\n[Yes, attest that I'm a non-US citizen](command:attest non-US)";
 };
 
-exports.pleasePay = (receiving_address, price) => {
-	return "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+").";
+exports.pleasePay = (receiving_address, price, user_address) => {
+	return "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address="+user_address+").";
 };
 
-exports.pleasePayOrPrivacy = (receiving_address, price, post_publicly) => {
-	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price);
+exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly) => {
+	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address);
 };
 
 exports.insertMyAddress = () => {
