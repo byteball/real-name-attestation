@@ -17,7 +17,7 @@ exports.attestNonUS = () => {
 };
 
 exports.pleasePay = (receiving_address, price, user_address) => {
-	return "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address="+user_address+").";
+	return "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address=single"+user_address+").";
 };
 
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly) => {
