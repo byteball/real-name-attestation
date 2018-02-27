@@ -20,7 +20,7 @@ const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
 
-const PRICE_TIMEOUT = 3600; // in seconds
+const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
 let countryLookup = maxmind.openSync('../GeoLite2-Country.mmdb');
 
