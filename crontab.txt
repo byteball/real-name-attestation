@@ -1,1 +1,1 @@
-*/20 * * * * cd ico-bot; node check_daemon.js 1>>~/.config/real-name-attestation/check_daemon.log 2>>~/.config/real-name-attestation/check_daemon.err
+*/20 * * * * cd real-name-attestation; node check_daemon.js 1>>~/.config/real-name-attestation/check_daemon.log 2>>~/.config/real-name-attestation/check_daemon.err
