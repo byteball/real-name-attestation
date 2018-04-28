@@ -258,6 +258,25 @@ function respond(from_address, text, response){
 		
 		if (text === 'req')
 			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
+		if (text === 'testsign')
+			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
+		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
+		if (arrSignedMessageMatches){
+			let signedMessageBase64 = arrSignedMessageMatches[1];
+			var validation = require('byteballcore/validation.js');
+			var signedMessageJson = Buffer(signedMessageBase64, 'base64').toString('utf8');
+			console.error(signedMessageJson);
+			try{
+				var objSignedMessage = JSON.parse(signedMessageJson);
+			}
+			catch(e){
+				return null;
+			}
+			validation.validateSignedMessage(objSignedMessage, err => {
+				device.sendMessageToDevice(from_address, 'text', err || 'ok');
+			});
+			return;
+		}
 		
 		checkUserAddress(user_address_response => {
 			if (user_address_response)
