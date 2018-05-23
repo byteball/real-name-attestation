@@ -166,6 +166,10 @@ function handleJumioData(transaction_id, body){
 		scan_result = 0;
 		error = "couldn't extract your name.  Please [try again](command:again) and provide a document with your name printed in Latin characters.";
 	}
+	if (scan_result && !data.identityVerification){
+		console.error("no identityVerification in tx "+transaction_id);
+		return;
+	}
 	if (scan_result && !data.identityVerification.validity){ // selfie check and selfie match
 		scan_result = 0;
 		error = data.identityVerification.reason;
