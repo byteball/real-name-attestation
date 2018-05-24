@@ -469,6 +469,7 @@ eventBus.once('headless_wallet_ready', () => {
 			throw new Error(error);
 		
 		let headlessWallet = require('headless-byteball');
+		const split = require('headless-byteball/split.js');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
 			console.log('== real name attestation address: '+address1);
 			realNameAttestation.assocAttestorAddresses['real name'] = address1;
@@ -481,6 +482,8 @@ eventBus.once('headless_wallet_ready', () => {
 					
 					server.listen(conf.webPort);
 
+					split.startCheckingAndSplittingLargestOutput(reward.distribution_address);
+					
 					setInterval(jumio.retryInitScans, 60*1000);
 					setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
 					setInterval(reward.retrySendingRewards, 10*1000);
