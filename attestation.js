@@ -139,7 +139,7 @@ app.post('*/cb', function(req, res) {
 
 function getCountryByIp(ip){
 	let countryInfo = countryLookup.get(ip);
-	if (!countryInfo){
+	if (!countryInfo || !countryInfo.country){
 		console.log('failed to determine country of IP '+ip);
 		return 'UNKNOWN';
 	}
