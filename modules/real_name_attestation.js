@@ -47,7 +47,7 @@ function getAttestationPayloadAndSrcProfile(user_address, data, bPublic){
 	});
 	console.log(profile);
 	if (bPublic){
-	//	throw "public";
+		throw "public";
 		profile.user_id = getUserId(profile);
 		let attestation = {
 			address: user_address,
@@ -186,10 +186,11 @@ function retryPostingAttestations(){
 	db.query(
 		"SELECT transaction_id, extracted_data, post_publicly, user_address, attestation_type \n\
 		FROM attestation_units JOIN transactions USING(transaction_id) JOIN receiving_addresses USING(receiving_address) \n\
-		WHERE attestation_unit IS NULL AND post_publicly=0", 
+		WHERE attestation_unit IS NULL", 
 		rows => {
 			rows.forEach(row => {
 				let attestation, src_profile;
+				row.post_publicly = 0; // override user choice
 				if (row.attestation_type === 'real name')
 					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.post_publicly);
 				else

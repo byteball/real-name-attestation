@@ -194,6 +194,7 @@ function handleJumioData(transaction_id, body){
 					bNonUS = false;
 			}
 			db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], () => {
+				row.post_publicly = 0; // override user choice
 				let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
 				if (!row.post_publicly)
 					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
