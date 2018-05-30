@@ -69,7 +69,7 @@ function sendAndWriteReward(reward_type, transaction_id){
 function retrySendingRewardsOfType(reward_type){
 	const table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
 	db.query(
-		"SELECT transaction_id FROM "+table+" WHERE reward_unit IS NULL", 
+		"SELECT transaction_id FROM "+table+" WHERE reward_unit IS NULL LIMIT 5", 
 		rows => {
 			rows.forEach(row => {
 				sendAndWriteReward(reward_type, row.transaction_id);
