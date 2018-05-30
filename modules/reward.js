@@ -22,7 +22,7 @@ function sendReward(user_address, reward, device_address, onDone){
 		if (err){
 			console.log("failed to send reward: "+err);
 			let balances = require('byteballcore/balances');
-			balances.readBalance(exports.distribution_address, (balance) => {
+			balances.readOutputsBalance(exports.distribution_address, (balance) => {
 				console.error(balance);
 				notifications.notifyAdmin('failed to send reward', err + ", balance: " + JSON.stringify(balance));
 			});
