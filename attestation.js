@@ -205,12 +205,12 @@ function handleJumioData(transaction_id, body){
 				if (conf.rewardInUSD){
 					let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
 					db.query(
-						"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, user_address, user_id, reward) VALUES (?,?,?,?)", 
-						[transaction_id, row.user_address, attestation.profile.user_id, rewardInBytes], 
+						"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward) VALUES (?, ?,?,?, ?)", 
+						[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes], 
 						(res) => {
 							console.log("reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
 							if (!res.affectedRows)
-								return console.log("duplicate user_address or user_id: "+row.user_address+", "+attestation.profile.user_id);
+								return console.log("duplicate user_address or user_id or device address: "+row.user_address+", "+attestation.profile.user_id+", "+row.device_address);
 							device.sendMessageToDevice(row.device_address, 'text', "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.");
 							reward.sendAndWriteReward('attestation', transaction_id);
 							if (conf.referralRewardInUSD){

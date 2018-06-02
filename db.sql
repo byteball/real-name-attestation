@@ -68,6 +68,7 @@ CREATE TABLE rejected_payments (
 
 CREATE TABLE reward_units (
 	transaction_id INTEGER NOT NULL PRIMARY KEY,
+	device_address CHAR(33) NOT NULL UNIQUE,
 	user_address CHAR(32) NOT NULL UNIQUE,
 	user_id CHAR(44) NOT NULL UNIQUE,
 	reward INT NOT NULL,
@@ -91,3 +92,8 @@ CREATE TABLE referral_reward_units (
 	FOREIGN KEY (reward_unit) REFERENCES units(unit)
 );
 
+/*
+-- it is NULL because we already have records which would break uniqueness
+ALTER TABLE reward_units ADD COLUMN device_address CHAR(33) NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS reward_units_by_device_address ON reward_units(device_address);
+*/
