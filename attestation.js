@@ -487,8 +487,8 @@ eventBus.once('headless_wallet_ready', () => {
 					
 					setInterval(jumio.retryInitScans, 60*1000);
 					setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
-					setInterval(reward.retrySendingRewards, 10*1000);
-					setInterval(pollAndHandleJumioScanData, 60*1000);
+					setInterval(reward.retrySendingRewards, 120*1000);
+					setInterval(pollAndHandleJumioScanData, 300*1000);
 					setInterval(moveFundsToAttestorAddresses, 60*1000);
 				});
 			});
