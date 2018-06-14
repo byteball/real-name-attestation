@@ -9,12 +9,11 @@ const MAX_REFERRAL_DEPTH = 5;
 
 exports.distribution_address = null;
 
-function sendReward(user_address, reward, device_address, onDone){
+function sendReward(outputs, device_address, onDone){
 	let headlessWallet = require('headless-byteball');
 	headlessWallet.sendMultiPayment({
 		asset: null,
-		amount: reward,
-		to_address: user_address,
+		base_outputs: outputs,
 		paying_addresses: [exports.distribution_address],
 		change_address: exports.distribution_address,
 		recipient_device_address: device_address
@@ -38,8 +37,11 @@ function sendAndWriteReward(reward_type, transaction_id){
 	const table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		db.query(
-			"SELECT receiving_addresses.device_address, reward_date, reward, "+table+".user_address \n\
-			FROM "+table+" JOIN transactions USING(transaction_id) JOIN receiving_addresses USING(receiving_address) \n\
+			"SELECT receiving_addresses.device_address, reward_date, reward, "+table+".user_address, contract_reward, contract_address \n\
+			FROM "+table+" \n\
+			JOIN transactions USING(transaction_id) \n\
+			JOIN receiving_addresses USING(receiving_address) \n\
+			LEFT JOIN contracts ON "+table+".user_address=contracts.user_address \n\
 			WHERE transaction_id=?", 
 			[transaction_id], 
 			rows => {
@@ -48,7 +50,16 @@ function sendAndWriteReward(reward_type, transaction_id){
 				let row = rows[0];
 				if (row.reward_date) // already sent
 					return unlock();
-				sendReward(row.user_address, row.reward, row.device_address, (err, unit) => {
+				if (row.contract_reward && !row.contract_address)
+					throw Error("no contract address for reward "+reward_type+" "+transaction_id);
+				let outputs = [];
+				if (row.reward)
+					outputs.push({address: row.user_address, amount: row.reward});
+				if (row.contract_reward)
+					outputs.push({address: row.contract_address, amount: row.contract_reward});
+				if (outputs.length === 0)
+					throw Error("no rewards in tx "+reward_type+" "+transaction_id);
+				sendReward(outputs, row.device_address, (err, unit) => {
 					if (err)
 						return unlock();
 					db.query(

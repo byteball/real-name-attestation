@@ -66,12 +66,21 @@ CREATE TABLE rejected_payments (
 	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE
 );
 
+CREATE TABLE contracts (
+	user_address CHAR(32) NOT NULL PRIMARY KEY,
+	contract_address CHAR(32) NOT NULL UNIQUE,
+	contract_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	contract_vesting_date TIMESTAMP NOT NULL,
+	FOREIGN KEY (contract_address) REFERENCES shared_addresses(shared_address)
+);
+
 CREATE TABLE reward_units (
 	transaction_id INTEGER NOT NULL PRIMARY KEY,
 	device_address CHAR(33) NOT NULL UNIQUE,
 	user_address CHAR(32) NOT NULL UNIQUE,
 	user_id CHAR(44) NOT NULL UNIQUE,
 	reward INT NOT NULL,
+	contract_reward INT NOT NULL,
 	reward_unit CHAR(44) NULL UNIQUE,
 	reward_date TIMESTAMP NULL,
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
@@ -85,6 +94,7 @@ CREATE TABLE referral_reward_units (
 	new_user_id CHAR(44) NOT NULL UNIQUE,
 	new_user_address CHAR(44) NOT NULL UNIQUE,
 	reward INT NOT NULL,
+	contract_reward INT NOT NULL,
 	reward_unit CHAR(44) NULL UNIQUE,
 	reward_date TIMESTAMP NULL,
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
@@ -96,4 +106,16 @@ CREATE TABLE referral_reward_units (
 -- it is NULL because we already have records which would break uniqueness
 ALTER TABLE reward_units ADD COLUMN device_address CHAR(33) NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS reward_units_by_device_address ON reward_units(device_address);
+
+CREATE TABLE contracts (
+	user_address CHAR(32) NOT NULL PRIMARY KEY,
+	contract_address CHAR(32) NOT NULL UNIQUE,
+	contract_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	contract_vesting_date TIMESTAMP NOT NULL,
+	FOREIGN KEY (contract_address) REFERENCES shared_addresses(shared_address)
+);
+
+ALTER TABLE reward_units ADD COLUMN contract_reward INT NULL;
+ALTER TABLE referral_reward_units ADD COLUMN contract_reward INT NULL;
+
 */

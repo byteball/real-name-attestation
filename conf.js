@@ -34,8 +34,15 @@ exports.MIN_AVAILABLE_WITNESSINGS = 100;
 
 
 exports.priceInUSD = 8;
-exports.rewardInUSD = 20;
-exports.referralRewardInUSD = 20;
+exports.rewardInUSD = 8;
+exports.contractRewardInUSD = 12;
+exports.referralRewardInUSD = 0;
+exports.contractReferralRewardInUSD = 20;
+
+exports.contractTerm = 1; // years
+exports.contractUnclaimedTerm = 2; // years
+
+exports.TIMESTAMPER_ADDRESS = 'I2ADHGP4HL6J37NQAD73J7E5SKFIXJOT'; // isTestnet ? 'OPNUXBRSSQQGHKQNEPD2GLWQYEUY5XLD' : 'I2ADHGP4HL6J37NQAD73J7E5SKFIXJOT'
 
 // set this in conf.json
 exports.salt = null;

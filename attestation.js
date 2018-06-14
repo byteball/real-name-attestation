@@ -202,34 +202,45 @@ function handleJumioData(transaction_id, body){
 					setTimeout(() => {
 						device.sendMessageToDevice(row.device_address, 'text', texts.attestNonUS());
 					}, 2000);
-				if (conf.rewardInUSD){
+				if (conf.rewardInUSD || conf.contractRewardInUSD){
 					let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
+					let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
 					db.query(
-						"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward) VALUES (?, ?,?,?, ?)", 
-						[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes], 
-						(res) => {
+						"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
+						[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes, contractRewardInBytes], 
+						async (res) => {
 							console.log("reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
 							if (!res.affectedRows)
 								return console.log("duplicate user_address or user_id or device address: "+row.user_address+", "+attestation.profile.user_id+", "+row.device_address);
-							device.sendMessageToDevice(row.device_address, 'text', "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.");
+							let [contract_address, vesting_ts] = await createContract(row.user_address, row.device_address);
+							let message = "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.";
+							if (conf.contractRewardInUSD)
+								message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
+							device.sendMessageToDevice(row.device_address, 'text', message);
 							reward.sendAndWriteReward('attestation', transaction_id);
-							if (conf.referralRewardInUSD){
+							if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
 								let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
-								reward.findReferrer(row.payment_unit, (referring_user_id, referring_user_address, referring_user_device_address) => {
+								let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
+								reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
 									if (!referring_user_address)
 										return console.log("no referring user for "+row.user_address);
+									let [referrer_contract_address, referrer_vesting_date_ts] = 
+										await getReferrerContract(referring_user_address, referring_user_device_address);
 									db.query(
 										"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
-										(transaction_id, user_address, user_id, new_user_address, new_user_id, reward) VALUES (?, ?,?, ?,?, ?)", 
+										(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
 										[transaction_id, 
 										referring_user_address, referring_user_id, 
 										row.user_address, attestation.profile.user_id, 
-										referralRewardInBytes], 
+										referralRewardInBytes, contractReferralRewardInBytes], 
 										(res) => {
 											console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
 											if (!res.affectedRows)
 												return notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
-											device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
+											let reward_text = referralRewardInBytes
+												? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
+												: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
+											device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity "+reward_text+".  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
 											reward.sendAndWriteReward('referral', transaction_id);
 										}
 									);
@@ -241,6 +252,75 @@ function handleJumioData(transaction_id, body){
 			});
 		}
 	);
+}
+
+function createContract(user_address, device_address){
+	let device = require('byteballcore/device.js');
+	let date = new Date();
+	date.setUTCHours(0,0,0,0);
+	let current_year = date.getUTCFullYear();
+	let vesting_ts = date.setUTCFullYear(current_year + conf.contractTerm);
+	let claim_back_ts = date.setUTCFullYear(current_year + conf.contractUnclaimedTerm);
+	let arrDefinition = ['or', [
+		['and', [
+			['address', user_address],
+			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', vesting_ts]]
+		]],
+		['and', [
+			['address', reward.distribution_address],
+			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', claim_back_ts]]
+		]]
+	]];
+	let assocSignersByPath = {
+		'r.0.0': {
+			address: user_address,
+			member_signing_path: 'r',
+			device_address: device_address
+		},
+		'r.1.0': {
+			address: reward.distribution_address,
+			member_signing_path: 'r',
+			device_address: device.getMyDeviceAddress()
+		}
+	};
+
+	return new Promise(resolve => {
+		let walletDefinedByAddresses = require('byteballcore/wallet_defined_by_addresses.js');
+		walletDefinedByAddresses.createNewSharedAddress(arrDefinition, assocSignersByPath, {
+			ifError: (err) => {
+				throw new Error(err);
+			},
+			ifOk: (shared_address) => {
+				db.query(
+					"INSERT "+db.getIgnore()+" INTO contracts (user_address, contract_address, contract_vesting_date) \n\
+					VALUES(?,?,"+db.getFromUnixTime(vesting_ts/1000)+")", 
+					[user_address, shared_address],
+					() => {
+						resolve([shared_address, vesting_ts]);
+					}
+				);
+			}
+		});
+	});
+}
+
+function getReferrerContract(user_address, device_address){
+	return new Promise(resolve => {
+		db.query(
+			"SELECT contract_address, "+db.getUnixTimestamp('contract_vesting_date')+"*1000 AS contract_vesting_date_ts \n\
+			FROM contracts WHERE user_address=?", 
+			[user_address], 
+			async (rows) => {
+				if (rows.length > 0){
+					let contract_address = rows[0].contract_address;
+					let contract_vesting_date_ts = rows[0].contract_vesting_date_ts;
+					return resolve([contract_address, contract_vesting_date_ts]);
+				}
+				let [contract_address, contract_vesting_date_ts] = await createContract(user_address, device_address);
+				resolve([contract_address, contract_vesting_date_ts]);
+			}
+		);
+	});
 }
 
 function respond(from_address, text, response){
@@ -500,3 +580,4 @@ eventBus.once('headless_wallet_ready', () => {
 	});
 });
 
+process.on('unhandledRejection', up => { throw up; });
