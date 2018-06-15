@@ -83,8 +83,11 @@ CREATE TABLE reward_units (
 	contract_reward INT NOT NULL,
 	reward_unit CHAR(44) NULL UNIQUE,
 	reward_date TIMESTAMP NULL,
+	donated TINYINT NULL,
+	donation_unit CHAR(44) NULL,
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-	FOREIGN KEY (reward_unit) REFERENCES units(unit)
+	FOREIGN KEY (reward_unit) REFERENCES units(unit),
+	FOREIGN KEY (donation_unit) REFERENCES units(unit)
 );
 
 CREATE TABLE referral_reward_units (
@@ -117,5 +120,9 @@ CREATE TABLE contracts (
 
 ALTER TABLE reward_units ADD COLUMN contract_reward INT NULL;
 ALTER TABLE referral_reward_units ADD COLUMN contract_reward INT NULL;
+
+ALTER TABLE reward_units ADD COLUMN donated TINYINT NULL;
+ALTER TABLE reward_units ADD COLUMN donation_unit CHAR(44) NULL;
+CREATE INDEX IF NOT EXISTS reward_units_by_donation ON reward_units(donated, donation_unit);
 
 */

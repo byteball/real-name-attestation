@@ -198,10 +198,12 @@ function handleJumioData(transaction_id, body){
 				let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
 				if (!row.post_publicly)
 					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
-				if (bNonUS)
-					setTimeout(() => {
+				setTimeout(() => {
+					if (bNonUS)
 						device.sendMessageToDevice(row.device_address, 'text', texts.attestNonUS());
-					}, 2000);
+					else
+						device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
+				}, 2000);
 				if (conf.rewardInUSD || conf.contractRewardInUSD){
 					let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
 					let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
@@ -414,9 +416,20 @@ function respond(from_address, text, response){
 									db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
 										let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
 										realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
+										setTimeout(() => {
+											return device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
+										}, 2000);
 									});
 								}
 							);
+						}
+						else if (text === 'donate yes'){
+							db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
+							device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
+						}
+						else if (text === 'donate no'){
+							db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
+							device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
 						}
 						else
 							device.sendMessageToDevice(from_address, 'text', response + texts.alreadyAttested(row.attestation_date));
@@ -570,6 +583,7 @@ eventBus.once('headless_wallet_ready', () => {
 					setInterval(reward.retrySendingRewards, 120*1000);
 					setInterval(pollAndHandleJumioScanData, 300*1000);
 					setInterval(moveFundsToAttestorAddresses, 60*1000);
+					setInterval(reward.sendDonations, 24*3600*1000);
 					
 					const consolidation = require('headless-byteball/consolidation.js');
 					consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['real name'], headlessWallet.signer, 100, 3600*1000);

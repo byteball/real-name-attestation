@@ -162,8 +162,36 @@ function findReferrer(payment_unit, handleReferrer){
 	goBack([payment_unit]);
 }
 
+function sendDonations(){
+	const mutex = require('byteballcore/mutex.js');
+	mutex.lockOrSkip(['donations'], unlock => {
+		db.query("SELECT transaction_id, reward, contract_reward FROM reward_units WHERE donated=1 AND donation_unit IS NULL", rows => {
+			if (rows.length === 0)
+				return unlock();
+			let arrTransactionIds = rows.map(row => row.transaction_id);
+			let amount = rows.reduce((acc, row) => acc + row.reward + row.contract_reward, 0); // equal to total rewards
+			let headlessWallet = require('headless-byteball');
+			headlessWallet.sendMultiPayment({
+				asset: null,
+				to_address: conf.cf_address,
+				paying_addresses: [exports.distribution_address],
+				change_address: exports.distribution_address,
+			}, (err, unit) => {
+				if (err){
+					console.log("failed to send donation: "+err);
+					return unlock();
+				}
+				console.log("sent donations, unit "+unit);
+				db.query("UPDATE reward_units SET donation_unit=? WHERE transaction_id IN("+arrTransactionIds.join(', ')+")", [unit], () => {
+					unlock();
+				});
+			});
+		});
+	});
+}
 
 exports.sendAndWriteReward = sendAndWriteReward;
 exports.retrySendingRewards = retrySendingRewards;
 exports.findReferrer = findReferrer;
+exports.sendDonations = sendDonations;
 

@@ -44,6 +44,8 @@ exports.contractUnclaimedTerm = 2; // years
 
 exports.TIMESTAMPER_ADDRESS = 'I2ADHGP4HL6J37NQAD73J7E5SKFIXJOT'; // isTestnet ? 'OPNUXBRSSQQGHKQNEPD2GLWQYEUY5XLD' : 'I2ADHGP4HL6J37NQAD73J7E5SKFIXJOT'
 
+exports.cf_address = 'ISQ6EG6V6V3R5BRCGJZVRYJ6PQQFQXH3';
+
 // set this in conf.json
 exports.salt = null;
 
