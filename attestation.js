@@ -24,6 +24,8 @@ const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
 let countryLookup = maxmind.openSync('../GeoLite2-Country.mmdb');
 
+let assocAskedForDonation = {};
+
 function readUserInfo(device_address, cb) {
 	db.query("SELECT user_address FROM users WHERE device_address = ?", [device_address], rows => {
 		if (rows.length)
@@ -202,8 +204,15 @@ function handleJumioData(transaction_id, body){
 					if (!row.post_publicly)
 						realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
 					setTimeout(() => {
-						if (bNonUS)
+						if (bNonUS){
 							device.sendMessageToDevice(row.device_address, 'text', texts.attestNonUS());
+							setTimeout(() => {
+								if (assocAskedForDonation[row.device_address])
+									return;
+								device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
+								assocAskedForDonation[row.device_address] = Date.now();
+							}, 6000);
+						}
 						else
 							device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
 					}, 2000);
@@ -428,7 +437,10 @@ function respond(from_address, text, response){
 										let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
 										realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
 										setTimeout(() => {
-											return device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
+											if (assocAskedForDonation[from_address])
+												return;
+											device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
+											assocAskedForDonation[from_address] = Date.now();
 										}, 2000);
 									});
 								}
