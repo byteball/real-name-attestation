@@ -174,86 +174,97 @@ function handleJumioData(transaction_id, body){
 		scan_result = 0;
 		error = data.identityVerification.reason;
 	}
-	db.query(
-		"UPDATE transactions SET scan_result=?, result_date="+db.getNow()+", extracted_data=? \n\
-		WHERE transaction_id=? AND scan_result IS NULL", 
-		[scan_result, JSON.stringify(body), transaction_id]);
-	db.query(
-		"SELECT user_address, device_address, post_publicly, payment_unit \n\
-		FROM transactions CROSS JOIN receiving_addresses USING(receiving_address) WHERE transaction_id=?", 
-		[transaction_id],
-		rows => {
-			let row = rows[0];
-			if (scan_result === 0){
-				return device.sendMessageToDevice(row.device_address, 'text', "Verification failed: "+error+"\n\nTry [again](command:again)?");
-			}
-			let bNonUS = (data.idCountry !== 'USA');
-			if (bNonUS){
-				let ipCountry = getCountryByIp(data.clientIp);
-				if (ipCountry === 'US' || ipCountry === 'UNKNOWN')
-					bNonUS = false;
-			}
-			db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], () => {
-				row.post_publicly = 0; // override user choice
-				let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
-				if (!row.post_publicly)
-					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
-				setTimeout(() => {
-					if (bNonUS)
-						device.sendMessageToDevice(row.device_address, 'text', texts.attestNonUS());
-					else
-						device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
-				}, 2000);
-				if (conf.rewardInUSD || conf.contractRewardInUSD){
-					let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
-					let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
-					db.query(
-						"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
-						[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes, contractRewardInBytes], 
-						async (res) => {
-							console.log("reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-							if (!res.affectedRows)
-								return console.log("duplicate user_address or user_id or device address: "+row.user_address+", "+attestation.profile.user_id+", "+row.device_address);
-							let [contract_address, vesting_ts] = await createContract(row.user_address, row.device_address);
-							let message = "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.";
-							if (conf.contractRewardInUSD)
-								message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
-							device.sendMessageToDevice(row.device_address, 'text', message);
-							reward.sendAndWriteReward('attestation', transaction_id);
-							if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
-								let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
-								let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
-								reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
-									if (!referring_user_address)
-										return console.log("no referring user for "+row.user_address);
-									let [referrer_contract_address, referrer_vesting_date_ts] = 
-										await getReferrerContract(referring_user_address, referring_user_device_address);
-									db.query(
-										"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
-										(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
-										[transaction_id, 
-										referring_user_address, referring_user_id, 
-										row.user_address, attestation.profile.user_id, 
-										referralRewardInBytes, contractReferralRewardInBytes], 
-										(res) => {
-											console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-											if (!res.affectedRows)
-												return notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
-											let reward_text = referralRewardInBytes
-												? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
-												: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
-											device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity "+reward_text+".  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
-											reward.sendAndWriteReward('referral', transaction_id);
-										}
-									);
-								});
-							}
-						}
-					);
+	const mutex = require('byteballcore/mutex.js');
+	mutex.lock(['tx-'+transaction_id], unlock => {
+		db.query(
+			"UPDATE transactions SET scan_result=?, result_date="+db.getNow()+", extracted_data=? \n\
+			WHERE transaction_id=? AND scan_result IS NULL", 
+			[scan_result, JSON.stringify(body), transaction_id]);
+		db.query(
+			"SELECT user_address, device_address, post_publicly, payment_unit \n\
+			FROM transactions CROSS JOIN receiving_addresses USING(receiving_address) WHERE transaction_id=?", 
+			[transaction_id],
+			rows => {
+				let row = rows[0];
+				if (scan_result === 0){
+					device.sendMessageToDevice(row.device_address, 'text', "Verification failed: "+error+"\n\nTry [again](command:again)?");
+					return unlock();
 				}
-			});
-		}
-	);
+				let bNonUS = (data.idCountry !== 'USA');
+				if (bNonUS){
+					let ipCountry = getCountryByIp(data.clientIp);
+					if (ipCountry === 'US' || ipCountry === 'UNKNOWN')
+						bNonUS = false;
+				}
+				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], () => {
+					row.post_publicly = 0; // override user choice
+					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
+					if (!row.post_publicly)
+						realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
+					setTimeout(() => {
+						if (bNonUS)
+							device.sendMessageToDevice(row.device_address, 'text', texts.attestNonUS());
+						else
+							device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
+					}, 2000);
+					if (conf.rewardInUSD || conf.contractRewardInUSD){
+						let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
+						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
+						db.query(
+							"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
+							[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes, contractRewardInBytes], 
+							async (res) => {
+								console.log("reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+								if (!res.affectedRows){
+									console.log("duplicate user_address or user_id or device address: "+row.user_address+", "+attestation.profile.user_id+", "+row.device_address);
+									return unlock();
+								}
+								let [contract_address, vesting_ts] = await createContract(row.user_address, row.device_address);
+								let message = "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.";
+								if (conf.contractRewardInUSD)
+									message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
+								device.sendMessageToDevice(row.device_address, 'text', message);
+								reward.sendAndWriteReward('attestation', transaction_id);
+								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
+									let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
+									let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
+									reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
+										if (!referring_user_address){
+											console.log("no referring user for "+row.user_address);
+											return unlock();
+										}
+										let [referrer_contract_address, referrer_vesting_date_ts] = 
+											await getReferrerContract(referring_user_address, referring_user_device_address);
+										db.query(
+											"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
+											(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
+											[transaction_id, 
+											referring_user_address, referring_user_id, 
+											row.user_address, attestation.profile.user_id, 
+											referralRewardInBytes, contractReferralRewardInBytes], 
+											(res) => {
+												console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+												if (!res.affectedRows){
+													notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
+													return unlock();
+												}
+												let reward_text = referralRewardInBytes
+													? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
+													: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
+												device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity "+reward_text+".  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
+												reward.sendAndWriteReward('referral', transaction_id);
+												unlock();
+											}
+										);
+									});
+								}
+							}
+						);
+					}
+				});
+			}
+		);
+	});
 }
 
 function createContract(user_address, device_address){
