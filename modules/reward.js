@@ -174,6 +174,7 @@ function sendDonations(){
 			headlessWallet.sendMultiPayment({
 				asset: null,
 				to_address: conf.cf_address,
+				amount: amount,
 				paying_addresses: [exports.distribution_address],
 				change_address: exports.distribution_address,
 			}, (err, unit) => {
