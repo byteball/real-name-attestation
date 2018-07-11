@@ -5,7 +5,8 @@ const conf = require('byteballcore/conf.js');
 
 
 exports.greeting = () => {
-	return "Here you can attest your real name.\n\nYour real name and other personal information (date of birth, document number, country, etc) will be saved privately in your wallet, only a proof of attestation will be posted publicly on the distributed ledger.  The very fact of being attested may give you access to some services or tokens, even without disclosing your real name.  Some apps may request you to reveal some of the fields of your attested profile, you choose what to reveal and to which app.\n\nYou may also choose to make all your attested data public.\n\nIf you are a non-US citizen, we will offer you to attest this fact, this information is always public.  This is useful for participation in some ICOs which restrict access to their tokens only to non-US citizens.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+".  The payment is nonrefundable even if the attestation fails for any reason.\n\nAfter payment, you will be redirected to Jumio for the verification.  Your device must have a camera to make photos of your face and your ID.  Have your ID ready, the ID must have your name printed in Latin characters.\n\nAfter you successfully verify yourself for the first time, you receive a $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" reward in Bytes.";
+	let objSteemDiscount = conf.discounts['JEDZYC2HMGDBIDQKG3XSTXUSHMCBK725'].discount_levels[0];
+	return "Here you can attest your real name.\n\nYour real name and other personal information (date of birth, document number, country, etc) will be saved privately in your wallet, only a proof of attestation will be posted publicly on the distributed ledger.  The very fact of being attested may give you access to some services or tokens, even without disclosing your real name.  Some apps may request you to reveal some of the fields of your attested profile, you choose what to reveal and to which app.\n\nYou may also choose to make all your attested data public.\n\nIf you are a non-US citizen, we will offer you to attest this fact, this information is always public.  This is useful for participation in some ICOs which restrict access to their tokens only to non-US citizens.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+".  The payment is nonrefundable even if the attestation fails for any reason.\n\nIf you are an attested Steem user with reputation over "+objSteemDiscount.reputation+", you get a "+objSteemDiscount.discount+"% discount from this price.\n\nAfter payment, you will be redirected to Jumio for the verification.  Your device must have a camera to make photos of your face and your ID.  Have your ID ready, the ID must have your name printed in Latin characters.\n\nAfter you successfully verify yourself for the first time, you receive a $"+(conf.rewardInUSD+conf.contractRewardInUSD).toLocaleString([], {minimumFractionDigits: 2})+" reward in Bytes which consists of two parts: $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" is immediately spendable while $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" is locked on a smart contract that can be spent after "+conf.contractTerm+" year.";
 };
 
 exports.privateOrPublic = () => {
@@ -16,12 +17,16 @@ exports.attestNonUS = () => {
 	return "You are a non-US citizen.  Do you want this fact to be also attested?  This information will be public, i.e. everybody will be able to see that your Byteball address belongs to a non-US citizen, but nothing else will be disclosed.\n\n[Yes, attest that I'm a non-US citizen](command:attest non-US)";
 };
 
-exports.pleasePay = (receiving_address, price, user_address) => {
-	return "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address=single"+user_address+").";
+exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD) => {
+	let text = "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address=single"+user_address+")";
+	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
+		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
+	text += ".";
+	return text;
 };
 
-exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly) => {
-	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address);
+exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
+	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD);
 };
 
 exports.insertMyAddress = () => {

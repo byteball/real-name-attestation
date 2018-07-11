@@ -46,6 +46,15 @@ exports.TIMESTAMPER_ADDRESS = 'I2ADHGP4HL6J37NQAD73J7E5SKFIXJOT'; // isTestnet ?
 
 exports.cf_address = 'ISQ6EG6V6V3R5BRCGJZVRYJ6PQQFQXH3';
 
+exports.discounts = {
+	JEDZYC2HMGDBIDQKG3XSTXUSHMCBK725: {
+		domain: 'steem',
+		discount_levels: [
+			{reputation: 50, discount: 30},
+		]
+	},
+};
+
 // set this in conf.json
 exports.salt = null;
 

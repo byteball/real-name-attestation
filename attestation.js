@@ -14,6 +14,7 @@ const jumioApi = require('./modules/jumio_api.js');
 const jumio = require('./modules/jumio.js');
 const realNameAttestation = require('./modules/real_name_attestation.js');
 const reward = require('./modules/reward.js');
+const discounts = require('./modules/discounts.js');
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
@@ -34,7 +35,7 @@ function readUserInfo(device_address, cb) {
 			db.query("INSERT "+db.getIgnore()+" INTO users (device_address) VALUES(?)", [device_address], () => {
 				cb({
 					device_address: device_address,
-					user_addres: null
+					user_address: null
 				});
 			});
 		}
@@ -345,6 +346,14 @@ function getReferrerContract(user_address, device_address){
 	});
 }
 
+async function getPriceInUSD(user_address){
+	let objDiscount = await discounts.getDiscount(user_address);
+	let priceInUSD = conf.priceInUSD * (1-objDiscount.discount/100);
+	priceInUSD = Math.round(priceInUSD*100)/100;
+	objDiscount.priceInUSD = priceInUSD;
+	return objDiscount;
+}
+
 function respond(from_address, text, response){
 	let device = require('byteballcore/device.js');
 	readUserInfo(from_address, userInfo => {
@@ -388,8 +397,9 @@ function respond(from_address, text, response){
 		checkUserAddress(user_address_response => {
 			if (user_address_response)
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
-			readOrAssignReceivingAddress(from_address, userInfo.user_address, (receiving_address, post_publicly) => {
-				let price = conversion.getPriceInBytes(conf.priceInUSD);
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+				let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address);
+				let price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
 				updatePrice(receiving_address, price);
 				if (text === 'private' || text === 'public'){
 					post_publicly = (text === 'public') ? 1 : 0;
@@ -403,7 +413,7 @@ function respond(from_address, text, response){
 				if (post_publicly === null)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again')
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly));
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
 				db.query(
 					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
 					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
@@ -411,7 +421,7 @@ function respond(from_address, text, response){
 					[receiving_address], 
 					rows => {
 						if (rows.length === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly));
+							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
 						let row = rows[0];
 						let scan_result = row.scan_result;
 						if (scan_result === null)
@@ -489,12 +499,13 @@ eventBus.once('headless_and_rates_ready', () => {
 			rows => {
 				rows.forEach(row => {
 			
-					function checkPayment(onDone){
+					async function checkPayment(onDone){
 						let delay = Math.round(Date.now()/1000 - row.price_ts);
 						let bLate = (delay > PRICE_TIMEOUT);
 						if (row.asset !== null)
 							return onDone("Received payment in wrong asset", delay);
-						let current_price = conversion.getPriceInBytes(conf.priceInUSD);
+						let objDiscountedPriceInUSD = await getPriceInUSD(row.user_address);
+						let current_price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
 						let expected_amount = bLate ? current_price : row.price;
 						if (row.amount < expected_amount){
 							updatePrice(row.device_address, current_price);
@@ -502,7 +513,7 @@ eventBus.once('headless_and_rates_ready', () => {
 							text += bLate 
 								? ".  Your payment is too late and less than the current price.  " 
 								: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
-							return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address), delay);
+							return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address, objDiscountedPriceInUSD), delay);
 						}
 						db.query("SELECT address FROM unit_authors WHERE unit=?", [row.unit], author_rows => {
 							if (author_rows.length !== 1){
