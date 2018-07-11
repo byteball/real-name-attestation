@@ -14,6 +14,7 @@ const jumioApi = require('./modules/jumio_api.js');
 const jumio = require('./modules/jumio.js');
 const realNameAttestation = require('./modules/real_name_attestation.js');
 const reward = require('./modules/reward.js');
+const contract = require('./modules/contract.js');
 const discounts = require('./modules/discounts.js');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -229,7 +230,7 @@ function handleJumioData(transaction_id, body){
 									console.log("duplicate user_address or user_id or device address: "+row.user_address+", "+attestation.profile.user_id+", "+row.device_address);
 									return unlock();
 								}
-								let [contract_address, vesting_ts] = await createContract(row.user_address, row.device_address);
+								let [contract_address, vesting_ts] = await contract.createContract(row.user_address, row.device_address);
 								let message = "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.";
 								if (conf.contractRewardInUSD)
 									message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
@@ -244,7 +245,7 @@ function handleJumioData(transaction_id, body){
 											return unlock();
 										}
 										let [referrer_contract_address, referrer_vesting_date_ts] = 
-											await getReferrerContract(referring_user_address, referring_user_device_address);
+											await contract.getReferrerContract(referring_user_address, referring_user_device_address);
 										db.query(
 											"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
 											(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
@@ -277,74 +278,6 @@ function handleJumioData(transaction_id, body){
 	});
 }
 
-function createContract(user_address, device_address){
-	let device = require('byteballcore/device.js');
-	let date = new Date();
-	date.setUTCHours(0,0,0,0);
-	let current_year = date.getUTCFullYear();
-	let vesting_ts = date.setUTCFullYear(current_year + conf.contractTerm);
-	let claim_back_ts = date.setUTCFullYear(current_year + conf.contractUnclaimedTerm);
-	let arrDefinition = ['or', [
-		['and', [
-			['address', user_address],
-			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', vesting_ts]]
-		]],
-		['and', [
-			['address', reward.distribution_address],
-			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', claim_back_ts]]
-		]]
-	]];
-	let assocSignersByPath = {
-		'r.0.0': {
-			address: user_address,
-			member_signing_path: 'r',
-			device_address: device_address
-		},
-		'r.1.0': {
-			address: reward.distribution_address,
-			member_signing_path: 'r',
-			device_address: device.getMyDeviceAddress()
-		}
-	};
-
-	return new Promise(resolve => {
-		let walletDefinedByAddresses = require('byteballcore/wallet_defined_by_addresses.js');
-		walletDefinedByAddresses.createNewSharedAddress(arrDefinition, assocSignersByPath, {
-			ifError: (err) => {
-				throw new Error(err);
-			},
-			ifOk: (shared_address) => {
-				db.query(
-					"INSERT "+db.getIgnore()+" INTO contracts (user_address, contract_address, contract_vesting_date) \n\
-					VALUES(?,?,"+db.getFromUnixTime(vesting_ts/1000)+")", 
-					[user_address, shared_address],
-					() => {
-						resolve([shared_address, vesting_ts]);
-					}
-				);
-			}
-		});
-	});
-}
-
-function getReferrerContract(user_address, device_address){
-	return new Promise(resolve => {
-		db.query(
-			"SELECT contract_address, "+db.getUnixTimestamp('contract_vesting_date')+"*1000 AS contract_vesting_date_ts \n\
-			FROM contracts WHERE user_address=?", 
-			[user_address], 
-			async (rows) => {
-				if (rows.length > 0){
-					let contract_address = rows[0].contract_address;
-					let contract_vesting_date_ts = rows[0].contract_vesting_date_ts;
-					return resolve([contract_address, contract_vesting_date_ts]);
-				}
-				let [contract_address, contract_vesting_date_ts] = await createContract(user_address, device_address);
-				resolve([contract_address, contract_vesting_date_ts]);
-			}
-		);
-	});
-}
 
 async function getPriceInUSD(user_address){
 	let objDiscount = await discounts.getDiscount(user_address);
