@@ -18,7 +18,7 @@ function createContract(user_address, device_address){
 			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', vesting_ts]]
 		]],
 		['and', [
-			['address', reward.distributionAddress],
+			['address', reward.distribution_address],
 			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', claim_back_ts]]
 		]]
 	]];
@@ -29,7 +29,7 @@ function createContract(user_address, device_address){
 			device_address: device_address
 		},
 		'r.1.0': {
-			address: reward.distributionAddress,
+			address: reward.distribution_address,
 			member_signing_path: 'r',
 			device_address: device.getMyDeviceAddress()
 		}
