@@ -327,6 +327,9 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, usd_price, userInfo.user_address));
 		}
+		if (text.length == 20) { // voucher
+			
+		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
 		if (arrSignedMessageMatches){
 			let signedMessageBase64 = arrSignedMessageMatches[1];
@@ -447,8 +450,8 @@ eventBus.once('headless_and_rates_ready', () => {
 			FROM outputs
 			CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)
-			UNION -- vouchers
-			SELECT amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts
+			UNION -- vouchers deposit / reward
+			SELECT outputs.amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts
 			FROM outputs
 			CROSS JOIN vouchers ON outputs.address=vouchers.receiving_address
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
@@ -502,10 +505,17 @@ eventBus.once('headless_and_rates_ready', () => {
 								}
 							);
 						}
-						db.query(
-							"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
-							[row.receiving_address, row.price, row.amount, row.unit]
-						);
+						if (row.price > 0)
+							db.query(
+								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
+								[row.receiving_address, row.price, row.amount, row.unit]
+							);
+						else
+							db.query(
+								`INSERT INTO voucher_transactions (voucher_id, amount, unit)
+								SELECT voucher_id, ?, ? FROM vouchers WHERE receiving_address=?`, 
+								[row.amount, row.unit, row.receiving_address]
+							);
 						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation.  It should take 5-10 minutes.");
 					});
 				});
@@ -529,17 +539,18 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher_id, device_address, vouchers.amount
+			`SELECT voucher_id, device_address, outputs.amount, inputs.unit
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
-			JOIN inputs ON inputs.address=vouchers.user_address
-			WHERE unit IN(?)`,
-			[arrUnits],
+			LEFT JOIN inputs ON inputs.address=? AND inputs.unit IN (?)
+			WHERE outputs.unit IN(?) AND outsputs.asset IS NULL`,
+			[arrUnits, reward.distribution_address, arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
-					db.query(`UPDATE vouchers SET amount_deposited= WHERE transaction_id=?`, [row.transaction_id]);
-					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to Jumio...");
-					jumio.initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+					if (row.unit)
+						db.query(`UPDATE vouchers SET amount_deposited=amount_deposited+? WHERE voucher_id=?`, [row.amount, row.voucher_id]);
+					db.query(`UPDATE vouchers SET amount=amount+? WHERE voucher_id=?`, [row.amount, row.voucher_id]);
+					device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});
 			}
 		);
