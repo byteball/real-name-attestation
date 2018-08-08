@@ -25,6 +25,14 @@ exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceI
 	return text;
 };
 
+exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
+	return `To deposit voucher ${voucher} for e.g. $${amount}, send message using following format: [deposit ${voucher} ${amount}](suggest-command:deposit ${voucher} ${amount})`;
+};
+
+exports.payToVoucher = (receiving_address, voucher, price, usd_price, user_address) => {
+	return `Please pay ${price} bytes to deposit $${usd_price} to your voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
+};
+
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
 	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD);
 };

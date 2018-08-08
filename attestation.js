@@ -16,6 +16,7 @@ const realNameAttestation = require('./modules/real_name_attestation.js');
 const reward = require('./modules/reward.js');
 const contract = require('./modules/contract.js');
 const discounts = require('./modules/discounts.js');
+const voucher = require('./modules/voucher.js');
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
@@ -289,7 +290,7 @@ async function getPriceInUSD(user_address){
 
 function respond(from_address, text, response){
 	let device = require('byteballcore/device.js');
-	readUserInfo(from_address, userInfo => {
+	readUserInfo(from_address, async (userInfo) => {
 		
 		function checkUserAddress(onDone){
 			if (validationUtils.isValidAddress(text)){
@@ -309,6 +310,23 @@ function respond(from_address, text, response){
 			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
 		if (text === 'testsign')
 			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
+		if (text === 'voucher') {
+			let [voucher_code, receiving_address] = await voucher.issueNew(userInfo.user_address, from_address);
+			device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
+			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+		}
+		if (text.startsWith('deposit')) {
+			let tokens = text.split(" ");
+			if (tokens.length != 3)
+				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher());
+			let voucher_code = tokens[1];
+			let usd_price = tokens[2];
+			let price = conversion.getPriceInBytes(usd_price);
+			let voucherInfo = await voucher.getInfo(voucher_code);
+			if (!voucherInfo)
+				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, usd_price, userInfo.user_address));
+		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
 		if (arrSignedMessageMatches){
 			let signedMessageBase64 = arrSignedMessageMatches[1];
@@ -425,35 +443,43 @@ eventBus.once('headless_and_rates_ready', () => {
 	eventBus.on('new_my_transactions', arrUnits => {
 		let device = require('byteballcore/device.js');
 		db.query(
-			"SELECT amount, asset, device_address, receiving_address, user_address, unit, price, "+db.getUnixTimestamp('last_price_date')+" AS price_ts \n\
-			FROM outputs CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address \n\
-			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)",
+			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts
+			FROM outputs
+			CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address
+			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)
+			UNION -- vouchers
+			SELECT amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts
+			FROM outputs
+			CROSS JOIN vouchers ON outputs.address=vouchers.receiving_address
+			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
 			[arrUnits],
 			rows => {
 				rows.forEach(row => {
 			
 					async function checkPayment(onDone){
-						let delay = Math.round(Date.now()/1000 - row.price_ts);
-						let bLate = (delay > PRICE_TIMEOUT);
 						if (row.asset !== null)
 							return onDone("Received payment in wrong asset", delay);
-						let objDiscountedPriceInUSD = await getPriceInUSD(row.user_address);
-						let current_price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
-						let expected_amount = bLate ? current_price : row.price;
-						if (row.amount < expected_amount){
-							updatePrice(row.device_address, current_price);
-							let text = "Received "+(row.amount/1e9)+" GB from you";
-							text += bLate 
-								? ".  Your payment is too late and less than the current price.  " 
-								: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
-							return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address, objDiscountedPriceInUSD), delay);
+						if (row.price > 0) {// not voucher
+							let delay = Math.round(Date.now()/1000 - row.price_ts);
+							let bLate = (delay > PRICE_TIMEOUT);
+							let objDiscountedPriceInUSD = await getPriceInUSD(row.user_address);
+							let current_price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
+							let expected_amount = bLate ? current_price : row.price;
+							if (row.amount < expected_amount){
+								updatePrice(row.device_address, current_price);
+								let text = "Received "+(row.amount/1e9)+" GB from you";
+								text += bLate 
+									? ".  Your payment is too late and less than the current price.  " 
+									: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
+								return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address, objDiscountedPriceInUSD), delay);
+							}
 						}
 						db.query("SELECT address FROM unit_authors WHERE unit=?", [row.unit], author_rows => {
 							if (author_rows.length !== 1){
 								resetUserAddress();
 								return onDone("Received a payment but looks like it was not sent from a single-address wallet.  "+texts.switchToSingleAddress());
 							}
-							if (author_rows[0].address !== row.user_address){
+							if (row.price > 0 && author_rows[0].address !== row.user_address){ // only for non-vouchers
 								resetUserAddress();
 								return onDone("Received a payment but it was not sent from the expected address "+row.user_address+".  "+texts.switchToSingleAddress());
 							}
@@ -489,14 +515,29 @@ eventBus.once('headless_and_rates_ready', () => {
 	
 	eventBus.on('my_transactions_became_stable', arrUnits => {
 		let device = require('byteballcore/device.js');
-		db.query(
-			"SELECT transaction_id, device_address, user_address \n\
-			FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
-			WHERE payment_unit IN(?) ",
+		db.query( // transactions
+			`SELECT transaction_id, device_address, user_address
+			FROM transactions JOIN receiving_addresses USING(receiving_address)
+			WHERE payment_unit IN(?)`,
 			[arrUnits],
 			rows => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
+					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to Jumio...");
+					jumio.initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+				});
+			}
+		);
+		db.query( // deposit vouchers
+			`SELECT voucher_id, device_address, vouchers.amount
+			FROM vouchers
+			JOIN outputs ON outputs.address=vouchers.receiving_address
+			JOIN inputs ON inputs.address=vouchers.user_address
+			WHERE unit IN(?)`,
+			[arrUnits],
+			rows => {
+				rows.forEach(row => {
+					db.query(`UPDATE vouchers SET amount_deposited= WHERE transaction_id=?`, [row.transaction_id]);
 					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to Jumio...");
 					jumio.initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
 				});

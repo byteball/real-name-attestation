@@ -126,3 +126,18 @@ ALTER TABLE reward_units ADD COLUMN donation_unit CHAR(44) NULL;
 CREATE INDEX IF NOT EXISTS reward_units_by_donation ON reward_units(donated, donation_unit);
 
 */
+
+CREATE TABLE vouchers (
+	voucher_id INTEGER NOT NULL PRIMARY KEY,
+	user_address CHAR(32) NULL,
+	device_address CHAR(33) NOT NULL,
+	receiving_address CHAR(32) NOT NULL,
+	voucher CHAR(20) NOT NULL,
+	amount INT NOT NULL DEFAULT 0,
+	amount_deposited INT NOT NULL DEFAULT 0,
+	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
+);
+CREATE INDEX byVoucher ON vouchers(voucher);
+
+ALTER TABLE transactions ADD COLUMN contract_reward INT NULL;
