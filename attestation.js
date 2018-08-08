@@ -328,7 +328,16 @@ function respond(from_address, text, response){
 			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, usd_price, userInfo.user_address));
 		}
 		if (text.length == 20) { // voucher
-			
+			// TODO: check if we waiting for voucher code here
+			let voucherInfo = await voucher.getInfo(text);
+			if (!voucherInfo)
+				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+			db.query(
+				"INSERT INTO transactions (receiving_address, price, received_amount) VALUES (?, 0, 0)", 
+				[voucherInfo.receiving_address] // TODO: will voucher receiving address fit it?
+			);
+			//TODO: check available balance
+			db.query(`UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`, [conversion.getPriceInBytes(conf.priceInUSD), voucherInfo.voucher_id]);
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
 		if (arrSignedMessageMatches){

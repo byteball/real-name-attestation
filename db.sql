@@ -151,4 +151,4 @@ CREATE TABLE voucher_transactions (
 	FOREIGN KEY (unit) REFERENCES units(unit)
 );
 
-ALTER TABLE transactions ADD COLUMN contract_reward INT NULL;
+ALTER TABLE transactions ADD COLUMN voucher_id INT NULL;
