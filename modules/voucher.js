@@ -34,6 +34,17 @@ function getInfo(voucher){
 	});
 }
 
+function setLimit(voucher_id, limit){
+	return new Promise((resolve) => {
+		db.query(
+			`UPDATE vouchers SET usage_limit=? WHERE voucher_id=?`, 
+			[limit, voucher_id],
+			resolve
+		);
+	});
+}
+
 exports.issueNew = issueNew;
 exports.getInfo = getInfo;
+exports.setLimit = setLimit;
 

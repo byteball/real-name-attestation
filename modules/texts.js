@@ -29,6 +29,10 @@ exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
 	return `To deposit voucher ${voucher} for e.g. $${amount}, send message using following format: [deposit ${voucher} ${amount}](suggest-command:deposit ${voucher} ${amount})`;
 };
 
+exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 3) => {
+	return `To limit number of voucher uses per device, send message using following format: [limit ${voucher} ${amount}](suggest-command:limit ${voucher} ${amount})`;
+};
+
 exports.payToVoucher = (receiving_address, voucher, price, usd_price, user_address) => {
 	return `Please pay ${price} bytes to deposit $${usd_price} to your voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
 };

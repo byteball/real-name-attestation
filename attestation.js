@@ -327,6 +327,20 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, usd_price, userInfo.user_address));
 		}
+		if (text.startsWith('limit')) { // voucher
+			let tokens = text.split(" ");
+			if (tokens.length != 3)
+				return device.sendMessageToDevice(from_address, 'text', texts.limitVoucher());
+			let voucher_code = tokens[1];
+			let limit = tokens[2]|0;
+			let voucherInfo = await voucher.getInfo(voucher_code);
+			if (!voucherInfo)
+				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+			if (limit < 1)
+				return device.sendMessageToDevice(from_address, 'text', `invalid limit: ${limit}, should be > 0`);
+			await voucher.setLimit(voucherInfo.voucher_id, limit);
+			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
+		}
 		if (text.length == 20) { // voucher
 			// TODO: check if we waiting for voucher code here
 			let voucherInfo = await voucher.getInfo(text);

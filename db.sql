@@ -133,6 +133,7 @@ CREATE TABLE vouchers (
 	device_address CHAR(33) NOT NULL,
 	receiving_address CHAR(32) NOT NULL,
 	voucher CHAR(20) NOT NULL,
+	usage_limit INT NOT NULL DEFAULT 3,
 	amount INT NOT NULL DEFAULT 0,
 	amount_deposited INT NOT NULL DEFAULT 0,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
