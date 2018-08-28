@@ -7,6 +7,7 @@ const conf = require('byteballcore/conf');
 const db = require('byteballcore/db');
 const eventBus = require('byteballcore/event_bus.js');
 const texts = require('./modules/texts.js');
+const db_migrations = require('./db_migrations.js');
 const validationUtils = require('byteballcore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
@@ -111,6 +112,73 @@ function moveFundsToAttestorAddresses(){
 			});
 		}
 	);
+}
+
+function migrateDB() {
+	return new Promise(resolve => {
+		db.takeConnectionFromPool(function(connection) {
+			connection.query(
+				"SELECT name FROM sqlite_master WHERE type='table' AND name='vouchers'", 
+				[], 
+				rows => {
+					if (rows.length)
+						return resolve();
+					let arrQueries = [];
+					connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
+					connection.addQuery(arrQueries, `CREATE TABLE vouchers (
+							voucher_id INTEGER NOT NULL PRIMARY KEY,
+							user_address CHAR(32) NOT NULL,
+							device_address CHAR(33) NOT NULL,
+							receiving_address CHAR(32) NOT NULL,
+							voucher CHAR(20) NOT NULL,
+							usage_limit INT NOT NULL DEFAULT 3,
+							amount INT NOT NULL DEFAULT 0,
+							amount_deposited INT NOT NULL DEFAULT 0,
+							creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+							FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
+						)`);
+					connection.addQuery(arrQueries, `CREATE INDEX byVoucher ON vouchers(voucher)`);
+					connection.addQuery(arrQueries, `CREATE TABLE voucher_transactions (
+						voucher_id INT NOT NULL,
+						transaction_id INT NULL,
+						amount INT NOT NULL,
+						creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						unit CHAR(44) NULL UNIQUE,
+						FOREIGN KEY (voucher_id) REFERENCES vouchers(voucher_id),
+						FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
+						FOREIGN KEY (unit) REFERENCES units(unit)
+					)`);
+					connection.addQuery(arrQueries, `CREATE TABLE transactions_new (
+						transaction_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+						receiving_address CHAR(32) NOT NULL,
+						price INT NOT NULL,
+						received_amount INT NOT NULL,
+						payment_unit CHAR(44) NULL UNIQUE,
+						payment_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						is_confirmed INT NOT NULL DEFAULT 0,
+						confirmation_date TIMESTAMP NULL,
+						scanReference CHAR(20) NULL UNIQUE,
+						authorizationToken VARCHAR(36) NULL,
+						jumioIdScanReference VARCHAR(36) NULL UNIQUE,
+						scan_result TINYINT NULL, -- 1 success, 0 failure, NULL pending or abandoned
+						result_date TIMESTAMP NULL,
+						extracted_data VARCHAR(4096) NULL, -- json, nulled after posting the attestation unit
+						voucher_id INT NULL,
+						FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
+						FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
+						FOREIGN KEY (voucher_id) REFERENCES vouchers(voucher_id) ON DELETE CASCADE
+					)`);
+					connection.addQuery(arrQueries, `INSERT INTO transactions_new SELECT * FROM transactions`);
+					connection.addQuery(arrQueries, `DROP TABLE transactions`);
+					connection.addQuery(arrQueries, `ALTER TABLE transactions_new RENAME TO transactions`);
+					connection.addQuery(arrQueries, `COMMIT`);
+					require('async').series(arrQueries, function(){
+						resolve();
+					});
+				}
+			);
+		});
+	});
 }
 
 //app.use(express.static(__dirname + '/public'));
@@ -341,17 +409,19 @@ function respond(from_address, text, response){
 			await voucher.setLimit(voucherInfo.voucher_id, limit);
 			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
 		}
-		if (text.length == 20) { // voucher
+		if (text.length == 13) { // voucher
 			// TODO: check if we waiting for voucher code here
 			let voucherInfo = await voucher.getInfo(text);
 			if (!voucherInfo)
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+			let price = conversion.getPriceInBytes(conf.priceInUSD);
+			if (voucherInfo.amount < price)
+				return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds`);
 			db.query(
 				"INSERT INTO transactions (receiving_address, price, received_amount) VALUES (?, 0, 0)", 
 				[voucherInfo.receiving_address] // TODO: will voucher receiving address fit it?
 			);
-			//TODO: check available balance
-			db.query(`UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`, [conversion.getPriceInBytes(conf.priceInUSD), voucherInfo.voucher_id]);
+			db.query(`UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`, [price, voucherInfo.voucher_id]);
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
 		if (arrSignedMessageMatches){
@@ -478,7 +548,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			FROM outputs
 			CROSS JOIN vouchers ON outputs.address=vouchers.receiving_address
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
-			[arrUnits],
+			[arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
 			
@@ -565,14 +635,13 @@ eventBus.once('headless_and_rates_ready', () => {
 			`SELECT voucher_id, device_address, outputs.amount, inputs.unit
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
-			LEFT JOIN inputs ON inputs.address=? AND inputs.unit IN (?)
-			WHERE outputs.unit IN(?) AND outsputs.asset IS NULL`,
-			[arrUnits, reward.distribution_address, arrUnits, arrUnits],
+			LEFT JOIN inputs ON inputs.address=? AND inputs.unit = outputs.unit
+			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
+			[reward.distribution_address, arrUnits],
 			rows => {
 				rows.forEach(row => {
-					if (row.unit)
-						db.query(`UPDATE vouchers SET amount_deposited=amount_deposited+? WHERE voucher_id=?`, [row.amount, row.voucher_id]);
-					db.query(`UPDATE vouchers SET amount=amount+? WHERE voucher_id=?`, [row.amount, row.voucher_id]);
+					let deposited = !row.unit ? "amount_deposited=amount_deposited+?" : "amount=amount+?"; // amount just to consume 2nd parameter passed to query
+					db.query(`UPDATE vouchers SET amount=amount+?, ${deposited} WHERE voucher_id=?`, [row.amount, row.amount, row.voucher_id]);
 					device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});
 			}
@@ -588,7 +657,7 @@ function pollAndHandleJumioScanData(){
 eventBus.once('headless_wallet_ready', () => {
 	let error = '';
 	let arrTableNames = ['users', 'receiving_addresses', 'transactions', 'attestation_units', 'rejected_payments'];
-	db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?)", [arrTableNames], rows => {
+	db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?)", [arrTableNames], async (rows) => {
 		if (rows.length !== arrTableNames.length)
 			error += texts.errorInitSql();
 
@@ -603,6 +672,8 @@ eventBus.once('headless_wallet_ready', () => {
 
 		if (error)
 			throw new Error(error);
+
+		await db_migrations();
 		
 		let headlessWallet = require('headless-byteball');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
