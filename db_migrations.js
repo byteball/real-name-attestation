@@ -9,8 +9,10 @@ module.exports = function() {
 				"SELECT name FROM sqlite_master WHERE type='table' AND name='vouchers'", 
 				[], 
 				rows => {
-					if (rows.length)
+					if (rows.length) {
+						connection.release();
 						return resolve();
+					}
 					let arrQueries = [];
 					connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
 					connection.addQuery(arrQueries, `CREATE TABLE vouchers (
@@ -61,6 +63,7 @@ module.exports = function() {
 					connection.addQuery(arrQueries, `ALTER TABLE transactions_new RENAME TO transactions`);
 					connection.addQuery(arrQueries, `COMMIT`);
 					require('async').series(arrQueries, function(){
+						connection.release();
 						resolve();
 					});
 				}

@@ -23,6 +23,7 @@ const bodyParser = require('body-parser');
 const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
+const async_module = require('async');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
@@ -172,7 +173,7 @@ function migrateDB() {
 					connection.addQuery(arrQueries, `DROP TABLE transactions`);
 					connection.addQuery(arrQueries, `ALTER TABLE transactions_new RENAME TO transactions`);
 					connection.addQuery(arrQueries, `COMMIT`);
-					require('async').series(arrQueries, function(){
+					async_module.series(arrQueries, function(){
 						resolve();
 					});
 				}
@@ -410,18 +411,58 @@ function respond(from_address, text, response){
 			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
 		}
 		if (text.length == 13) { // voucher
-			// TODO: check if we waiting for voucher code here
-			let voucherInfo = await voucher.getInfo(text);
-			if (!voucherInfo)
-				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
-			let price = conversion.getPriceInBytes(conf.priceInUSD);
-			if (voucherInfo.amount < price)
-				return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds`);
-			db.query(
-				"INSERT INTO transactions (receiving_address, price, received_amount) VALUES (?, 0, 0)", 
-				[voucherInfo.receiving_address] // TODO: will voucher receiving address fit it?
-			);
-			db.query(`UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`, [price, voucherInfo.voucher_id]);
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, (receiving_address, post_publicly) => {
+				db.query(
+					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
+					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
+					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1", 
+					[receiving_address], 
+					async (rows) => {
+						if (!rows.length) { // not yet attested
+							let voucherInfo = await voucher.getInfo(text);
+							if (!voucherInfo)
+								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+							let price = conversion.getPriceInBytes(conf.priceInUSD);
+							if (voucherInfo.amount < price)
+								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds`);
+							// voucher limit
+							db.query(`SELECT COUNT(1) AS count FROM transactions
+								JOIN receiving_addresses USING(receiving_address)
+								WHERE voucher_id=? AND device_address=?`,
+								[voucherInfo.voucher_id, from_address],
+								function(rows){
+									var count = rows[0].count;
+									if (rows[0].count >= voucherInfo.usage_limit)
+										return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+
+									db.takeConnectionFromPool(function(connection) {
+										let arrQueries = [];
+										connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
+										connection.addQuery(arrQueries,
+											`INSERT INTO transactions (receiving_address, voucher_id, price, received_amount) VALUES (?, ?, 0, 0)`, 
+											[receiving_address, voucherInfo.voucher_id]);
+										connection.addQuery(arrQueries,
+											`INSERT INTO voucher_transactions (voucher_id, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+											[voucherInfo.voucher_id, price]);
+										connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`,
+											[price, voucherInfo.voucher_id]);
+										connection.addQuery(arrQueries, `COMMIT`);
+										async_module.series(arrQueries, function(){
+											connection.query(`SELECT transaction_id FROM transactions ORDER BY transaction_id DESC LIMIT 1`, [], function(rows){
+												connection.release();
+												jumio.initAndWriteScan(rows[0].transaction_id, from_address, userInfo.user_address);
+											})
+										});
+									});
+								}
+							);
+						}
+					}
+				);
+			});
+			return;
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
 		if (arrSignedMessageMatches){
