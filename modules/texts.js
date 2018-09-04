@@ -2,6 +2,7 @@
 'use strict';
 const desktopApp = require('byteballcore/desktop_app.js');
 const conf = require('byteballcore/conf.js');
+const conversion = require('./conversion.js');
 
 
 exports.greeting = () => {
@@ -27,6 +28,24 @@ exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceI
 
 exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
 	return `To deposit voucher ${voucher} for e.g. $${amount}, send message using following format: [deposit ${voucher} ${amount}](suggest-command:deposit ${voucher} ${amount})`;
+};
+
+exports.listVouchers = (user_address, vouchers) => {
+	let result = `Here is a list of all your vouchers for the address ${user_address}:\n\n`;
+	const usd_price = conversion.getPriceInBytes(1);
+	for (let voucherInfo of vouchers) {
+		let usd_amount = (voucherInfo.amount / usd_price).toLocaleString([], {minimumFractionDigits: 2, maximumFractionDigits: 2});
+		result += `${voucherInfo.voucher} – $${usd_amount} (${voucherInfo.amount} bytes)\n[deposit](suggest-command:deposit ${voucherInfo.voucher} ${conf.priceInUSD}) | [withdraw](suggest-command:withdraw ${voucherInfo.voucher} ${usd_amount})\n\n`;
+	}
+	return result;
+};
+
+exports.withdrawVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
+	return `To withdraw $${amount} from your voucher ${voucher}, send message using following format: [withdraw ${voucher} ${amount}](suggest-command:withdraw ${voucher} ${amount})`;
+};
+
+exports.withdrawComplete = (usd_price, bytes = 0, contract_bytes = 0, voucherInfo) => {
+	return `We sent you a total of $${usd_price} from your voucher ${voucherInfo.voucher}. ` + (bytes ? `${bytes} bytes was sent to your address ${voucherInfo.user_address}` : ``) + (contract_bytes ? ` and ${contract_bytes} bytes was sent to contract with you.` : ``);
 };
 
 exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 3) => {

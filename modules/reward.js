@@ -34,16 +34,25 @@ function sendReward(outputs, device_address, onDone){
 
 function sendAndWriteReward(reward_type, transaction_id){
 	const mutex = require('byteballcore/mutex.js');
-	const table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
+	let sql, table;
+	if (reward_type == "voucher") {
+		table = 'voucher_reward_units';
+		sql = `SELECT vouchers.device_address, reward_date, reward, vouchers.receiving_address AS user_address
+			FROM ${table}
+			JOIN transactions USING(transaction_id)
+			JOIN vouchers USING(voucher_id)
+			WHERE transaction_id=?`;
+	} else {
+		table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
+		sql = `SELECT receiving_addresses.device_address, reward_date, reward, ${table}.user_address, contract_reward, contract_address
+			FROM ${table}
+			JOIN transactions USING(transaction_id)
+			JOIN receiving_addresses USING(receiving_address)
+			LEFT JOIN contracts ON ${table}.user_address=contracts.user_address
+			WHERE transaction_id=?`;
+	}
 	mutex.lock(['tx-'+transaction_id], unlock => {
-		db.query(
-			"SELECT receiving_addresses.device_address, reward_date, reward, "+table+".user_address, contract_reward, contract_address \n\
-			FROM "+table+" \n\
-			JOIN transactions USING(transaction_id) \n\
-			JOIN receiving_addresses USING(receiving_address) \n\
-			LEFT JOIN contracts ON "+table+".user_address=contracts.user_address \n\
-			WHERE transaction_id=?", 
-			[transaction_id], 
+		db.query(sql, [transaction_id], 
 			rows => {
 				if (rows.length === 0)
 					throw Error("no record in "+table+" for tx "+transaction_id);
