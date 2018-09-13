@@ -187,7 +187,7 @@ function handleJumioData(transaction_id, body){
 			WHERE transaction_id=? AND scan_result IS NULL", 
 			[scan_result, JSON.stringify(body), transaction_id]);
 		db.query(
-			"SELECT user_address, device_address, post_publicly, payment_unit, voucher_id \n\
+			"SELECT user_address, device_address, post_publicly, payment_unit, voucher \n\
 			FROM transactions CROSS JOIN receiving_addresses USING(receiving_address) WHERE transaction_id=?", 
 			[transaction_id],
 			rows => {
@@ -222,8 +222,8 @@ function handleJumioData(transaction_id, body){
 					}, 2000);
 					if (conf.rewardInUSD || conf.contractRewardInUSD){
 						let voucherInfo = null;
-						if (row.voucher_id) {
-							voucherInfo = await voucher.getInfoById(row.voucher_id);
+						if (row.voucher) {
+							voucherInfo = await voucher.getInfo(row.voucher);
 						}
 						let rewardInBytes = voucherInfo ? 0 : conversion.getPriceInBytes(conf.rewardInUSD);
 						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
@@ -383,7 +383,7 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', `invalid limit: ${limit}, should be > 0`);
 			if (from_address != voucherInfo.device_address)
 				return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
-			await voucher.setLimit(voucherInfo.voucher_id, limit);
+			await voucher.setLimit(voucherInfo.voucher, limit);
 			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
 		}
 		if (text.startsWith('withdraw')) {
@@ -438,8 +438,8 @@ function respond(from_address, text, response){
 								// voucher limit
 								db.query(`SELECT COUNT(1) AS count FROM transactions
 									JOIN receiving_addresses USING(receiving_address)
-									WHERE voucher_id=? AND device_address=?`,
-									[voucherInfo.voucher_id, from_address],
+									WHERE voucher=? AND device_address=?`,
+									[voucherInfo.voucher, from_address],
 									function(rows){
 										var count = rows[0].count;
 										if (rows[0].count >= voucherInfo.usage_limit) {
@@ -451,13 +451,13 @@ function respond(from_address, text, response){
 											let arrQueries = [];
 											connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
 											connection.addQuery(arrQueries,
-												`INSERT INTO transactions (receiving_address, voucher_id, price, received_amount) VALUES (?, ?, 0, 0)`, 
-												[receiving_address, voucherInfo.voucher_id]);
+												`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, 
+												[receiving_address, voucherInfo.voucher]);
 											connection.addQuery(arrQueries,
-												`INSERT INTO voucher_transactions (voucher_id, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-												[voucherInfo.voucher_id, price]);
-											connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`,
-												[price, voucherInfo.voucher_id]);
+												`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+												[voucherInfo.voucher, price]);
+											connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
+												[price, voucherInfo.voucher]);
 											connection.addQuery(arrQueries, `COMMIT`);
 											async_module.series(arrQueries, function(){
 												connection.query(`SELECT transaction_id FROM transactions ORDER BY transaction_id DESC LIMIT 1`, [], function(rows){
@@ -658,8 +658,8 @@ eventBus.once('headless_and_rates_ready', () => {
 							);
 						else
 							db.query(
-								`INSERT INTO voucher_transactions (voucher_id, amount, unit)
-								SELECT voucher_id, ?, ? FROM vouchers WHERE receiving_address=?`, 
+								`INSERT INTO voucher_transactions (voucher, amount, unit)
+								SELECT voucher, ?, ? FROM vouchers WHERE receiving_address=?`, 
 								[row.amount, row.unit, row.receiving_address]
 							);
 						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation.  It should take 5-10 minutes.");
@@ -685,7 +685,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher_id, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit = IN (?) LIMIT 1) AS from_distribution
+			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit = IN (?) LIMIT 1) AS from_distribution
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
@@ -693,7 +693,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			rows => {
 				rows.forEach(row => {
 					let deposited = !row.from_distribution ? "amount_deposited=amount_deposited+?" : "amount=amount+?"; // amount just to consume 2nd parameter passed to query
-					db.query(`UPDATE vouchers SET amount=amount+?, ${deposited} WHERE voucher_id=?`, [row.amount, row.amount, row.voucher_id]);
+					db.query(`UPDATE vouchers SET amount=amount+?, ${deposited} WHERE voucher=?`, [row.amount, row.amount, row.voucher]);
 					if (!row.from_distribution)
 						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});

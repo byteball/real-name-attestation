@@ -40,7 +40,7 @@ function sendAndWriteReward(reward_type, transaction_id){
 		sql = `SELECT device_address, reward_date, reward, vouchers.receiving_address AS user_address
 			FROM ${table}
 			JOIN transactions USING(transaction_id)
-			JOIN vouchers USING(voucher_id)
+			JOIN vouchers USING(voucher)
 			WHERE transaction_id=?`;
 	} else {
 		table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';

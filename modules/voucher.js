@@ -36,18 +36,6 @@ function getInfo(voucher){
 	});
 }
 
-function getInfoById(voucher_id){
-	return new Promise((resolve) => {
-		db.query(
-			`SELECT * FROM vouchers WHERE voucher_id=?`, 
-			[voucher_id],
-			rows => {
-				resolve(rows[0]);
-			}
-		);
-	});
-}
-
 function getAllUserVouchers(user_address) {
 	return new Promise((resolve) => {
 		db.query(
@@ -60,11 +48,11 @@ function getAllUserVouchers(user_address) {
 	});
 }
 
-function setLimit(voucher_id, limit){
+function setLimit(voucher, limit){
 	return new Promise((resolve) => {
 		db.query(
-			`UPDATE vouchers SET usage_limit=? WHERE voucher_id=?`, 
-			[limit, voucher_id],
+			`UPDATE vouchers SET usage_limit=? WHERE voucher=?`, 
+			[limit, voucher],
 			resolve
 		);
 	});
@@ -93,10 +81,10 @@ function withdraw(voucherInfo, amount) {
 				return resolve([err]);
 			}
 			console.log("withdrawal success, unit "+unit);
-			db.query(`UPDATE vouchers SET amount=amount-?, amount_deposited=amount_deposited-? WHERE voucher_id=?`, [bytes+contract_bytes, bytes, voucherInfo.voucher_id], () => {
+			db.query(`UPDATE vouchers SET amount=amount-?, amount_deposited=amount_deposited-? WHERE voucher=?`, [bytes+contract_bytes, bytes, voucherInfo.voucher], () => {
 				db.query(
-					`INSERT INTO voucher_transactions (voucher_id, amount, unit) VALUES (?, ?, ?)`, 
-					[voucherInfo.voucher_id, bytes+contract_bytes, unit]
+					`INSERT INTO voucher_transactions (voucher, amount, unit) VALUES (?, ?, ?)`, 
+					[voucherInfo.voucher, bytes+contract_bytes, unit]
 				);
 				resolve([null, bytes, contract_bytes])});
 		});
@@ -105,7 +93,6 @@ function withdraw(voucherInfo, amount) {
 
 exports.issueNew = issueNew;
 exports.getInfo = getInfo;
-exports.getInfoById = getInfoById;
 exports.setLimit = setLimit;
 exports.withdraw = withdraw;
 exports.getAllUserVouchers = getAllUserVouchers;

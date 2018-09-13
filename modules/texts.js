@@ -36,7 +36,7 @@ exports.listVouchers = (user_address, vouchers) => {
 	for (let voucherInfo of vouchers) {
 		let usd_amount = (voucherInfo.amount / usd_price).toLocaleString([], {minimumFractionDigits: 2, maximumFractionDigits: 2});
 		let gb_amount = (voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9});
-		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit](suggest-command:deposit ${voucherInfo.voucher} ${conf.priceInUSD}) | [withdraw](suggest-command:withdraw ${voucherInfo.voucher} ${gb_amount})\n\n`;
+		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit...](suggest-command:deposit ${voucherInfo.voucher} ${conf.priceInUSD}) | [withdraw...](suggest-command:withdraw ${voucherInfo.voucher} ${gb_amount})\n\n`;
 	}
 	return result;
 };
@@ -51,7 +51,7 @@ exports.withdrawComplete = (bytes = 0, contract_bytes = 0, voucherInfo) => {
 	return `We sent you a total of ${gb+contract_gb} GB from your voucher ${voucherInfo.voucher}. ` + (gb ? `${gb} GB was sent to your address ${voucherInfo.user_address}` : ``) + (contract_gb ? ` and ${contract_gb} GB was sent to contract with you.` : ``);
 };
 
-exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 3) => {
+exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
 	return `To limit number of voucher uses per device, send message using following format: [limit ${voucher} ${amount}](suggest-command:limit ${voucher} ${amount})`;
 };
 
