@@ -202,11 +202,7 @@ function handleJumioData(transaction_id, body){
 					if (ipCountry === 'US' || ipCountry === 'UNKNOWN')
 						bNonUS = false;
 				}
-				let voucherInfo = null;
-				if (row.voucher_id) {
-					voucherInfo = voucher.getInfoById(row.voucher_id);
-				}
-				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], () => {
+				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], async () => {
 					row.post_publicly = 0; // override user choice
 					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
 					if (!row.post_publicly)
@@ -225,6 +221,10 @@ function handleJumioData(transaction_id, body){
 							device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
 					}, 2000);
 					if (conf.rewardInUSD || conf.contractRewardInUSD){
+						let voucherInfo = null;
+						if (row.voucher_id) {
+							voucherInfo = await voucher.getInfoById(row.voucher_id);
+						}
 						let rewardInBytes = voucherInfo ? 0 : conversion.getPriceInBytes(conf.rewardInUSD);
 						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
 						db.query(
@@ -278,16 +278,33 @@ function handleJumioData(transaction_id, body){
 											);
 										});
 									} else if (voucherInfo) {
-										const reward = referralRewardInBytes+contractReferralRewardInBytes;
 										db.query(
-											"INSERT "+db.getIgnore()+" INTO voucher_reward_units \n\
-											(transaction_id, voucher_id, reward) VALUES (?, ?, ?)", 
-											[transaction_id, voucherInfo.voucher_id, reward], 
-											(res) => {
-												console.log("voucher_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-												device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${(conf.referralRewardInUSD+conf.contractReferralRewardInUSD).toLocaleString([], {minimumFractionDigits: 2})} (${(reward/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
-												reward.sendAndWriteReward('voucher', transaction_id);
-												unlock();
+											`SELECT payload FROM messages
+											JOIN attestations USING (unit, message_index)
+											WHERE address=? AND attestor_address=?`,
+											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
+											function(rows) {
+												if (!rows.length) {
+													console.log(`no attestation for voucher user_address ${voucherInfo.user_address}`);
+													return unlock();
+												}
+												let row = rows[0];
+												let payload = JSON.parse(row.payload);
+												let user_id = payload.profile.user_id;
+												if (!user_id)
+													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
+												db.query(
+													`INSERT ${db.getIgnore()} INTO referral_reward_units
+													(transaction_id, user_address, user_id, new_user_address, new_user_id, reward)
+													VALUES (?, ?, ?, ?, ?, ?)`
+													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, referralRewardInBytes+contractReferralRewardInBytes],
+													(res) => {
+														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${(conf.referralRewardInUSD+conf.contractReferralRewardInUSD).toLocaleString([], {minimumFractionDigits: 2})} (${((referralRewardInBytes+contractReferralRewardInBytes)/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														reward.sendAndWriteReward('voucher', transaction_id);
+														unlock();
+													}
+												);
 											}
 										);
 									}
@@ -351,7 +368,7 @@ function respond(from_address, text, response){
 			let voucherInfo = await voucher.getInfo(voucher_code);
 			if (!voucherInfo)
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
-			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, usd_price, userInfo.user_address));
+			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
 		}
 		if (text.startsWith('limit')) { // voucher
 			let tokens = text.split(" ");
@@ -374,8 +391,8 @@ function respond(from_address, text, response){
 			if (tokens.length != 3)
 				return device.sendMessageToDevice(from_address, 'text', texts.withdrawVoucher());
 			let voucher_code = tokens[1];
-			let usd_price = tokens[2];
-			let price = conversion.getPriceInBytes(usd_price);
+			let gb_price = tokens[2];
+			let price = gb_price * 1e9;
 			mutex.lock(['voucher-'+voucher_code], async (unlock) => {
 				let voucherInfo = await voucher.getInfo(voucher_code);
 				if (!voucherInfo) {
@@ -388,7 +405,7 @@ function respond(from_address, text, response){
 				}
 				let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
 				if (!err)
-					device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(usd_price, bytes, contract_bytes, await voucher.getInfo(voucher_code)));
+					device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(bytes, contract_bytes, await voucher.getInfo(voucher_code)));
 				else
 					device.sendMessageToDevice(from_address, 'text', err);
 				unlock();
@@ -406,43 +423,53 @@ function respond(from_address, text, response){
 					[receiving_address], 
 					async (rows) => {
 						if (!rows.length) { // not yet attested
-							let voucherInfo = await voucher.getInfo(text);
-							if (!voucherInfo)
-								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
-							let price = conversion.getPriceInBytes(conf.priceInUSD);
-							if (voucherInfo.amount < price)
-								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds`);
-							// voucher limit
-							db.query(`SELECT COUNT(1) AS count FROM transactions
-								JOIN receiving_addresses USING(receiving_address)
-								WHERE voucher_id=? AND device_address=?`,
-								[voucherInfo.voucher_id, from_address],
-								function(rows){
-									var count = rows[0].count;
-									if (rows[0].count >= voucherInfo.usage_limit)
-										return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
-
-									db.takeConnectionFromPool(function(connection) {
-										let arrQueries = [];
-										connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
-										connection.addQuery(arrQueries,
-											`INSERT INTO transactions (receiving_address, voucher_id, price, received_amount) VALUES (?, ?, 0, 0)`, 
-											[receiving_address, voucherInfo.voucher_id]);
-										connection.addQuery(arrQueries,
-											`INSERT INTO voucher_transactions (voucher_id, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-											[voucherInfo.voucher_id, price]);
-										connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`,
-											[price, voucherInfo.voucher_id]);
-										connection.addQuery(arrQueries, `COMMIT`);
-										async_module.series(arrQueries, function(){
-											connection.query(`SELECT transaction_id FROM transactions ORDER BY transaction_id DESC LIMIT 1`, [], function(rows){
-												connection.release();
-												jumio.initAndWriteScan(rows[0].transaction_id, from_address, userInfo.user_address);
-											})
-										});
-									});
+							mutex.lock(['voucher-'+text], async (unlock) => {
+								let voucherInfo = await voucher.getInfo(text);
+								if (!voucherInfo) {
+									unlock();
+									return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 								}
-							);
+								let price = conversion.getPriceInBytes(conf.priceInUSD);
+								if (voucherInfo.amount < price) {
+									unlock();
+									device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
+									return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
+								}
+								// voucher limit
+								db.query(`SELECT COUNT(1) AS count FROM transactions
+									JOIN receiving_addresses USING(receiving_address)
+									WHERE voucher_id=? AND device_address=?`,
+									[voucherInfo.voucher_id, from_address],
+									function(rows){
+										var count = rows[0].count;
+										if (rows[0].count >= voucherInfo.usage_limit) {
+											unlock();
+											return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+										}
+
+										db.takeConnectionFromPool(function(connection) {
+											let arrQueries = [];
+											connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
+											connection.addQuery(arrQueries,
+												`INSERT INTO transactions (receiving_address, voucher_id, price, received_amount) VALUES (?, ?, 0, 0)`, 
+												[receiving_address, voucherInfo.voucher_id]);
+											connection.addQuery(arrQueries,
+												`INSERT INTO voucher_transactions (voucher_id, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+												[voucherInfo.voucher_id, price]);
+											connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher_id=?`,
+												[price, voucherInfo.voucher_id]);
+											connection.addQuery(arrQueries, `COMMIT`);
+											async_module.series(arrQueries, function(){
+												connection.query(`SELECT transaction_id FROM transactions ORDER BY transaction_id DESC LIMIT 1`, [], function(rows){
+													connection.release();
+													unlock();
+													jumio.initAndWriteScan(rows[0].transaction_id, from_address, userInfo.user_address);
+												})
+											});
+										});
+									}
+								);
+							});
 						}
 					}
 				);
@@ -658,17 +685,17 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher_id, device_address, outputs.amount, inputs.unit
+			`SELECT voucher_id, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit = IN (?) LIMIT 1) AS from_distribution
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
-			LEFT JOIN inputs ON inputs.address=? AND inputs.unit = outputs.unit
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
-			[reward.distribution_address, arrUnits],
+			[reward.distribution_address, arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
-					let deposited = !row.unit ? "amount_deposited=amount_deposited+?" : "amount=amount+?"; // amount just to consume 2nd parameter passed to query
+					let deposited = !row.from_distribution ? "amount_deposited=amount_deposited+?" : "amount=amount+?"; // amount just to consume 2nd parameter passed to query
 					db.query(`UPDATE vouchers SET amount=amount+?, ${deposited} WHERE voucher_id=?`, [row.amount, row.amount, row.voucher_id]);
-					device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
+					if (!row.from_distribution)
+						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});
 			}
 		);

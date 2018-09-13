@@ -78,7 +78,7 @@ function withdraw(voucherInfo, amount) {
 		if (bytes)
 			outputs.push({address: voucherInfo.user_address, amount: bytes});
 		if (contract_bytes) {
-			let [contract_address, vesting_ts] = await contract.createContract(voucherInfo.user_address, voucherInfo.device_address);
+			let [contract_address, vesting_ts] = await contract.getReferrerContract(voucherInfo.user_address, voucherInfo.device_address);
 			outputs.push({address: contract_address, amount: contract_bytes});
 		}
 		headlessWallet.sendMultiPayment({

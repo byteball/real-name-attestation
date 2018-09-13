@@ -36,8 +36,8 @@ function sendAndWriteReward(reward_type, transaction_id){
 	const mutex = require('byteballcore/mutex.js');
 	let sql, table;
 	if (reward_type == "voucher") {
-		table = 'voucher_reward_units';
-		sql = `SELECT vouchers.device_address, reward_date, reward, vouchers.receiving_address AS user_address
+		table = 'referral_reward_units';
+		sql = `SELECT device_address, reward_date, reward, vouchers.receiving_address AS user_address
 			FROM ${table}
 			JOIN transactions USING(transaction_id)
 			JOIN vouchers USING(voucher_id)

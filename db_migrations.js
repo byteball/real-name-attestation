@@ -38,16 +38,6 @@ module.exports = function() {
 						FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
 						FOREIGN KEY (unit) REFERENCES units(unit)
 					)`);
-					connection.addQuery(arrQueries, `CREATE TABLE voucher_reward_units (
-						transaction_id INTEGER NOT NULL PRIMARY KEY,
-						voucher_id INT NOT NULL,
-						reward INT NOT NULL,
-						reward_unit CHAR(44) NULL UNIQUE,
-						reward_date TIMESTAMP NULL,
-						FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-						FOREIGN KEY (voucher_id) REFERENCES vouchers(voucher_id),
-						FOREIGN KEY (reward_unit) REFERENCES units(unit)
-					)`);
 					connection.addQuery(arrQueries, `CREATE TABLE transactions_new (
 						transaction_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 						receiving_address CHAR(32) NOT NULL,
