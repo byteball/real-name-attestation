@@ -36,13 +36,15 @@ exports.listVouchers = (user_address, vouchers) => {
 	for (let voucherInfo of vouchers) {
 		let usd_amount = (voucherInfo.amount / usd_price).toLocaleString([], {minimumFractionDigits: 2, maximumFractionDigits: 2});
 		let gb_amount = (voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9});
-		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit...](suggest-command:deposit ${voucherInfo.voucher} ${conf.priceInUSD}) | [withdraw...](suggest-command:withdraw ${voucherInfo.voucher} ${gb_amount})\n\n`;
+		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit...](command:deposit ${voucherInfo.voucher}) | [withdraw...](command:withdraw ${voucherInfo.voucher})\n\n`;
 	}
 	return result;
 };
 
-exports.withdrawVoucher = (voucher = 'XXXXXXXXX', amount = 0.2) => {
-	return `To withdraw ${amount} GB from your voucher ${voucher}, send message using following format: [withdraw ${voucher} ${amount}](suggest-command:withdraw ${voucher} ${amount})`;
+exports.withdrawVoucher = (voucherInfo) => {
+	const gb_amount = (voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	const deposited_amount = (voucherInfo.amount_deposited/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	return `Voucher balance is ${gb_amount} GB, You have deposited ${deposited_amount} GB to this voucher and can claim it back to your wallet instantly. If you want to withdraw more than that, amount exceeding ${deposited_amount} GB will be sent to your contract, as it is your referrer reward. [withdraw ${voucherInfo.voucher} ${deposited_amount}](suggest-command:withdraw ${voucherInfo.voucher} ${deposited_amount})`;
 };
 
 exports.withdrawComplete = (bytes = 0, contract_bytes = 0, voucherInfo) => {

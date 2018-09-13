@@ -360,15 +360,18 @@ function respond(from_address, text, response){
 		}
 		if (text.startsWith('deposit')) {
 			let tokens = text.split(" ");
-			if (tokens.length != 3)
+			if (tokens.length == 1)
 				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher());
 			let voucher_code = tokens[1];
-			let usd_price = tokens[2];
-			let price = conversion.getPriceInBytes(usd_price);
 			let voucherInfo = await voucher.getInfo(voucher_code);
 			if (!voucherInfo)
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
-			return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
+			if (tokens.length == 3) {
+				let usd_price = tokens[2];
+				let price = conversion.getPriceInBytes(usd_price);
+				return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
+			}
+			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
 		}
 		if (text.startsWith('limit')) { // voucher
 			let tokens = text.split(" ");
@@ -388,27 +391,31 @@ function respond(from_address, text, response){
 		}
 		if (text.startsWith('withdraw')) {
 			let tokens = text.split(" ");
-			if (tokens.length != 3)
-				return device.sendMessageToDevice(from_address, 'text', texts.withdrawVoucher());
+			if (tokens.length < 2)
+				return device.sendMessageToDevice(from_address, 'text', `format: withdraw VOUCHER amount`);
 			let voucher_code = tokens[1];
-			let gb_price = tokens[2];
-			let price = gb_price * 1e9;
 			mutex.lock(['voucher-'+voucher_code], async (unlock) => {
 				let voucherInfo = await voucher.getInfo(voucher_code);
 				if (!voucherInfo) {
 					unlock();
 					return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 				}
-				if (price > voucherInfo.amount) {
-					unlock();
-					return device.sendMessageToDevice(from_address, 'text', `not enough funds on voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but voucher only has ${voucherInfo.amount} bytes`);
+				if (tokens.length == 3) {
+					let gb_price = tokens[2];
+					let price = gb_price * 1e9;
+					if (price > voucherInfo.amount) {
+						unlock();
+						return device.sendMessageToDevice(from_address, 'text', `not enough funds on voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but voucher only has ${voucherInfo.amount} bytes`);
+					}
+					let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
+					if (!err)
+						device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(bytes, contract_bytes, await voucher.getInfo(voucher_code)));
+					else
+						device.sendMessageToDevice(from_address, 'text', err);
+					return unlock();
 				}
-				let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
-				if (!err)
-					device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(bytes, contract_bytes, await voucher.getInfo(voucher_code)));
-				else
-					device.sendMessageToDevice(from_address, 'text', err);
 				unlock();
+				device.sendMessageToDevice(from_address, 'text', texts.withdrawVoucher(voucherInfo));
 			});
 			return;
 		}
