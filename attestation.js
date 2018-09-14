@@ -343,7 +343,7 @@ function respond(from_address, text, response){
 			onDone(texts.insertMyAddress());
 		}
 
-		function isAttested(receiving_address) {
+		function getAttestation(receiving_address) {
 			return new Promise(resolve => {
 				db.query(
 					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
@@ -362,7 +362,7 @@ function respond(from_address, text, response){
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-				let rows = await isAttested(receiving_address);
+				let rows = await getAttestation(receiving_address);
 				if (!rows.length)
 					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
 				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
@@ -439,7 +439,7 @@ function respond(from_address, text, response){
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-				let rows = await isAttested(receiving_address);
+				let rows = await getAttestation(receiving_address);
 				if (!rows.length) { // not yet attested
 					mutex.lock(['voucher-'+text], async (unlock) => {
 						let voucherInfo = await voucher.getInfo(text);
@@ -538,7 +538,7 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again')
 					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
-				let rows = await isAttested(receiving_address);
+				let rows = await getAttestation(receiving_address);
 				if (rows.length === 0)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
 				let row = rows[0];
