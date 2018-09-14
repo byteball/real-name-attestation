@@ -240,7 +240,7 @@ function handleJumioData(transaction_id, body){
 								if (rewardInBytes > 0)
 									message += ` and will receive a welcome bonus of $${conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Byteball distribution fund.`;
 								if (conf.contractRewardInUSD)
-									message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
+									message += ` You will ${rewardInBytes ? 'also ' : ''}receive a reward of $${conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) that will be locked on a smart contract for ${conf.contractTerm} year and can be spent only after ${new Date(vesting_ts).toDateString()}.`;
 								device.sendMessageToDevice(row.device_address, 'text', message);
 								reward.sendAndWriteReward('attestation', transaction_id);
 								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
@@ -284,8 +284,7 @@ function handleJumioData(transaction_id, body){
 											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
 											function(rows) {
 												if (!rows.length) {
-													console.log(`no attestation for voucher user_address ${voucherInfo.user_address}`);
-													return unlock();
+													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
 												}
 												let row = rows[0];
 												let payload = JSON.parse(row.payload);
