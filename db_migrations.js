@@ -16,7 +16,7 @@ module.exports = function() {
 					let arrQueries = [];
 					connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
 					connection.addQuery(arrQueries, `CREATE TABLE vouchers (
-							voucher CHAR(20) NOT NULL PRIMARY KEY,
+							voucher CHAR(13) NOT NULL PRIMARY KEY,
 							user_address CHAR(32) NOT NULL,
 							device_address CHAR(33) NOT NULL,
 							receiving_address CHAR(32) NOT NULL,
@@ -28,7 +28,7 @@ module.exports = function() {
 						)`);
 					connection.addQuery(arrQueries, `CREATE INDEX byVoucher ON vouchers(voucher)`);
 					connection.addQuery(arrQueries, `CREATE TABLE voucher_transactions (
-						voucher CHAR(20) NOT NULL,
+						voucher CHAR(13) NOT NULL,
 						transaction_id INT NULL,
 						amount INT NOT NULL,
 						creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -52,7 +52,7 @@ module.exports = function() {
 						scan_result TINYINT NULL, -- 1 success, 0 failure, NULL pending or abandoned
 						result_date TIMESTAMP NULL,
 						extracted_data VARCHAR(4096) NULL, -- json, nulled after posting the attestation unit
-						voucher CHAR(20) NULL,
+						voucher CHAR(13) NULL,
 						FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
 						FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
 						FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE

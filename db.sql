@@ -22,7 +22,7 @@ CREATE INDEX byReceivingAddress ON receiving_addresses(receiving_address);
 CREATE INDEX byUserAddress ON receiving_addresses(user_address);
 
 CREATE TABLE vouchers (
-	voucher CHAR(20) NOT NULL PRIMARY KEY,
+	voucher CHAR(13) NOT NULL PRIMARY KEY,
 	user_address CHAR(32) NOT NULL,
 	device_address CHAR(33) NOT NULL,
 	receiving_address CHAR(32) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE transactions (
 	scan_result TINYINT NULL, -- 1 success, 0 failure, NULL pending or abandoned
 	result_date TIMESTAMP NULL,
 	extracted_data VARCHAR(4096) NULL, -- json, nulled after posting the attestation unit
-	voucher CHAR(20) NULL,
+	voucher CHAR(13) NULL,
 	FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
 	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
 	FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE
@@ -142,7 +142,7 @@ CREATE INDEX IF NOT EXISTS reward_units_by_donation ON reward_units(donated, don
 */
 
 CREATE TABLE voucher_transactions (
-	voucher CHAR(20) NOT NULL,
+	voucher CHAR(13) NOT NULL,
 	transaction_id INT NULL,
 	amount INT NOT NULL,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
