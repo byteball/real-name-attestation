@@ -35,7 +35,7 @@ module.exports = function() {
 						unit CHAR(44) NULL UNIQUE,
 						FOREIGN KEY (voucher) REFERENCES vouchers(voucher),
 						FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-						FOREIGN KEY (unit) REFERENCES units(unit)
+						FOREIGN KEY (unit) REFERENCES units(unit) ON DELETE CASCADE
 					)`);
 					connection.addQuery(arrQueries, `CREATE TABLE transactions_new (
 						transaction_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

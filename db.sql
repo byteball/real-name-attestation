@@ -149,5 +149,5 @@ CREATE TABLE voucher_transactions (
 	unit CHAR(44) NULL UNIQUE,
 	FOREIGN KEY (voucher) REFERENCES vouchers(voucher),
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-	FOREIGN KEY (unit) REFERENCES units(unit)
+	FOREIGN KEY (unit) REFERENCES units(unit) ON DELETE CASCADE
 );

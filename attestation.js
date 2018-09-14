@@ -699,15 +699,21 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit = IN (?) LIMIT 1) AS from_distribution
+			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
 			[reward.distribution_address, arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
-					let deposited = !row.from_distribution ? "amount_deposited=amount_deposited+?" : "amount=amount+?"; // amount just to consume 2nd parameter passed to query
-					db.query(`UPDATE vouchers SET amount=amount+?, ${deposited} WHERE voucher=?`, [row.amount, row.amount, row.voucher]);
+					let deposited = "";
+					let params = [row.amount];
+					if (!row.from_distribution) {
+						deposited = ", amount_deposited=amount_deposited+?";
+						params.push(row.amount);
+					}
+					params.push(row.voucher);
+					db.query(`UPDATE vouchers SET amount=amount+? ${deposited} WHERE voucher=?`, params);
 					if (!row.from_distribution)
 						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});
