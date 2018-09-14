@@ -23,7 +23,6 @@ const bodyParser = require('body-parser');
 const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
-const async_module = require('async');
 const mutex = require('byteballcore/mutex.js');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
@@ -455,23 +454,31 @@ function respond(from_address, text, response){
 										}
 
 										db.takeConnectionFromPool(function(connection) {
-											let arrQueries = [];
-											connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
-											connection.addQuery(arrQueries,
-												`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, 
-												[receiving_address, voucherInfo.voucher]);
-											connection.addQuery(arrQueries,
-												`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-												[voucherInfo.voucher, price]);
-											connection.addQuery(arrQueries, `UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
-												[price, voucherInfo.voucher]);
-											connection.addQuery(arrQueries, `COMMIT`);
-											async_module.series(arrQueries, function(){
-												connection.query(`SELECT transaction_id FROM transactions ORDER BY transaction_id DESC LIMIT 1`, [], function(rows){
-													connection.release();
-													unlock();
-													jumio.initAndWriteScan(rows[0].transaction_id, from_address, userInfo.user_address);
+											let asyncQuery = (query, params = []) => {
+												return new Promise(resolve => {
+													connection.query(query, params, resolve)
 												})
+											}
+
+											let transaction_id;
+
+											asyncQuery(`BEGIN TRANSACTION`
+											).then(() => {
+												asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher])
+											}).then((res) => {
+												transaction_id = res.insertId;
+												asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+												[voucherInfo.voucher, price])
+											}).then(() => {
+												asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
+												[price, voucherInfo.voucher])
+											}).then(() => {
+												asyncQuery(`COMMIT`)
+											}).then(() => {
+												connection.release();
+												unlock();
+												jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+												device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
 											});
 										});
 									}
