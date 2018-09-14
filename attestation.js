@@ -342,6 +342,15 @@ function respond(from_address, text, response){
 				return onDone();
 			onDone(texts.insertMyAddress());
 		}
+
+		function isAttested(receiving_address) {
+			return new Promise(resolve => {
+				db.query(
+					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
+					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id)
+					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
+			})
+		}
 		
 		if (text === 'req')
 			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
@@ -352,9 +361,14 @@ function respond(from_address, text, response){
 		if (text === 'new voucher') {
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			let [voucher_code, receiving_address] = await voucher.issueNew(userInfo.user_address, from_address);
-			device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
-			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+				let rows = await isAttested(receiving_address);
+				if (!rows.length)
+					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
+				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
+				device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
+				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+			});
 		}
 		if (text === 'vouchers') {
 			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
@@ -424,72 +438,65 @@ function respond(from_address, text, response){
 		if (text.length == 13) { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			readOrAssignReceivingAddress(from_address, userInfo.user_address, (receiving_address, post_publicly) => {
-				db.query(
-					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
-					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
-					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1", 
-					[receiving_address], 
-					async (rows) => {
-						if (!rows.length) { // not yet attested
-							mutex.lock(['voucher-'+text], async (unlock) => {
-								let voucherInfo = await voucher.getInfo(text);
-								if (!voucherInfo) {
-									unlock();
-									return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
-								}
-								let price = conversion.getPriceInBytes(conf.priceInUSD);
-								if (voucherInfo.amount < price) {
-									unlock();
-									device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
-									return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
-								}
-								// voucher limit
-								db.query(`SELECT COUNT(1) AS count FROM transactions
-									JOIN receiving_addresses USING(receiving_address)
-									WHERE voucher=? AND device_address=?`,
-									[voucherInfo.voucher, from_address],
-									function(rows){
-										var count = rows[0].count;
-										if (rows[0].count >= voucherInfo.usage_limit) {
-											unlock();
-											return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
-										}
-
-										db.takeConnectionFromPool(function(connection) {
-											let asyncQuery = (query, params = []) => {
-												return new Promise(resolve => {
-													connection.query(query, params, resolve)
-												})
-											}
-
-											let transaction_id;
-
-											asyncQuery(`BEGIN TRANSACTION`
-											).then(() => {
-												asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher])
-											}).then((res) => {
-												transaction_id = res.insertId;
-												asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-												[voucherInfo.voucher, price])
-											}).then(() => {
-												asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
-												[price, voucherInfo.voucher])
-											}).then(() => {
-												asyncQuery(`COMMIT`)
-											}).then(() => {
-												connection.release();
-												unlock();
-												jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
-												device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
-											});
-										});
-									}
-								);
-							});
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+				let rows = await isAttested(receiving_address);
+				if (!rows.length) { // not yet attested
+					mutex.lock(['voucher-'+text], async (unlock) => {
+						let voucherInfo = await voucher.getInfo(text);
+						if (!voucherInfo) {
+							unlock();
+							return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 						}
-					}
-				);
+						let price = conversion.getPriceInBytes(conf.priceInUSD);
+						if (voucherInfo.amount < price) {
+							unlock();
+							device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
+							return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
+						}
+						// voucher limit
+						db.query(`SELECT COUNT(1) AS count FROM transactions
+							JOIN receiving_addresses USING(receiving_address)
+							WHERE voucher=? AND device_address=?`,
+							[voucherInfo.voucher, from_address],
+							function(rows){
+								var count = rows[0].count;
+								if (rows[0].count >= voucherInfo.usage_limit) {
+									unlock();
+									return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+								}
+
+								db.takeConnectionFromPool(function(connection) {
+									let asyncQuery = (query, params = []) => {
+										return new Promise(resolve => {
+											connection.query(query, params, resolve)
+										})
+									}
+
+									let transaction_id;
+
+									asyncQuery(`BEGIN TRANSACTION`
+									).then(() => {
+										asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher])
+									}).then((res) => {
+										transaction_id = res.insertId;
+										asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+										[voucherInfo.voucher, price])
+									}).then(() => {
+										asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
+										[price, voucherInfo.voucher])
+									}).then(() => {
+										asyncQuery(`COMMIT`)
+									}).then(() => {
+										connection.release();
+										unlock();
+										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+										device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
+									});
+								});
+							}
+						);
+					});
+				}
 			});
 			return;
 		}
@@ -531,60 +538,53 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again')
 					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
-				db.query(
-					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
-					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
-					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1", 
-					[receiving_address], 
-					rows => {
-						if (rows.length === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
-						let row = rows[0];
-						let scan_result = row.scan_result;
-						if (scan_result === null)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.underWay());
-						if (scan_result === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.previousAttestationFaled());
-						// scan_result === 1
-						if (text === 'attest non-US'){
-							db.query(
-								"SELECT attestation_unit FROM attestation_units WHERE transaction_id=? AND attestation_type='nonus'", 
-								[row.transaction_id],
-								nonus_rows => {
-									if (nonus_rows.length > 0){ // already exists
-										let attestation_unit = nonus_rows[0].attestation_unit;
-										return device.sendMessageToDevice(from_address, 'text', 
-											response + ( attestation_unit ? texts.alreadyAttestedInUnit(attestation_unit) : texts.underWay() ) );
-									}
-									let data = JSON.parse(row.extracted_data);
-									let cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
-									if (cb_data.idCountry === 'USA')
-										return device.sendMessageToDevice(from_address, 'text', response + "You are an US citizen, can't attest non-US");
-									db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
-										let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
-										realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
-										setTimeout(() => {
-											if (assocAskedForDonation[from_address])
-												return;
-											device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
-											assocAskedForDonation[from_address] = Date.now();
-										}, 2000);
-									});
-								}
-							);
+				let rows = await isAttested(receiving_address);
+				if (rows.length === 0)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
+				let row = rows[0];
+				let scan_result = row.scan_result;
+				if (scan_result === null)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.underWay());
+				if (scan_result === 0)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.previousAttestationFaled());
+				// scan_result === 1
+				if (text === 'attest non-US'){
+					db.query(
+						"SELECT attestation_unit FROM attestation_units WHERE transaction_id=? AND attestation_type='nonus'", 
+						[row.transaction_id],
+						nonus_rows => {
+							if (nonus_rows.length > 0){ // already exists
+								let attestation_unit = nonus_rows[0].attestation_unit;
+								return device.sendMessageToDevice(from_address, 'text', 
+									response + ( attestation_unit ? texts.alreadyAttestedInUnit(attestation_unit) : texts.underWay() ) );
+							}
+							let data = JSON.parse(row.extracted_data);
+							let cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+							if (cb_data.idCountry === 'USA')
+								return device.sendMessageToDevice(from_address, 'text', response + "You are an US citizen, can't attest non-US");
+							db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
+								let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
+								realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
+								setTimeout(() => {
+									if (assocAskedForDonation[from_address])
+										return;
+									device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
+									assocAskedForDonation[from_address] = Date.now();
+								}, 2000);
+							});
 						}
-						else if (text === 'donate yes'){
-							db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
-							device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
-						}
-						else if (text === 'donate no'){
-							db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
-							device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
-						}
-						else
-							device.sendMessageToDevice(from_address, 'text', response + texts.alreadyAttested(row.attestation_date));
-					}
-				);
+					);
+				}
+				else if (text === 'donate yes'){
+					db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
+					device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
+				}
+				else if (text === 'donate no'){
+					db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
+					device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
+				}
+				else
+					device.sendMessageToDevice(from_address, 'text', response + texts.alreadyAttested(row.attestation_date));
 			});
 		});
 	});
