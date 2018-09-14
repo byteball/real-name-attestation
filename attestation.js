@@ -348,6 +348,8 @@ function respond(from_address, text, response){
 		if (text === 'testsign')
 			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
 		if (text === 'new voucher') {
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let [voucher_code, receiving_address] = await voucher.issueNew(userInfo.user_address, from_address);
 			device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
