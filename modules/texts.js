@@ -61,6 +61,15 @@ exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
 	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
 };
 
+exports.vouchersHelp = () => {
+	return `Available voucher commands:\n
+	[new voucher](command:new voucher) - issues new voucher
+	[vouchers](command:vouchers) - list your vouchers
+	[deposit XXXXXXXXX 0.2](command:deposit) - deposit your voucher XXXXXXXXX
+	[limit XXXXXXXXX 3](command:limit) - limits number of uses of your voucher XXXXXXXXX per device
+	[withdraw XXXXXXXXX 0.2](command:withdraw) - withdraw funds accumulated on voucher XXXXXXXXX`;
+}
+
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
 	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD);
 };

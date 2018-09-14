@@ -345,6 +345,8 @@ function respond(from_address, text, response){
 		
 		if (text === 'req')
 			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
+		if (text === 'help')
+			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
 		if (text === 'testsign')
 			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
 		if (text === 'new voucher') {
