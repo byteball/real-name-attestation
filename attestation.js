@@ -465,7 +465,7 @@ function respond(from_address, text, response){
 									return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
 								}
 
-								db.takeConnectionFromPool(function(connection) {
+								db.takeConnectionFromPool(async (connection) => {
 									let asyncQuery = (query, params = []) => {
 										return new Promise(resolve => {
 											connection.query(query, params, resolve)
@@ -474,24 +474,17 @@ function respond(from_address, text, response){
 
 									let transaction_id;
 
-									asyncQuery(`BEGIN TRANSACTION`
-									).then(() => {
-										asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher])
-									}).then((res) => {
-										transaction_id = res.insertId;
-										asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-										[voucherInfo.voucher, price])
-									}).then(() => {
-										asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`,
-										[price, voucherInfo.voucher])
-									}).then(() => {
-										asyncQuery(`COMMIT`)
-									}).then(() => {
-										connection.release();
-										unlock();
-										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
-										device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
-									});
+									await asyncQuery(`BEGIN TRANSACTION`);
+									let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
+									transaction_id = res.insertId;
+									await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+										[voucherInfo.voucher, price]);
+									await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
+									await asyncQuery(`COMMIT`);
+									connection.release();
+									unlock();
+									jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+									device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
 								});
 							}
 						);
