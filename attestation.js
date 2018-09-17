@@ -241,6 +241,7 @@ function handleJumioData(transaction_id, body){
 									message += ` and will receive a welcome bonus of $${conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Byteball distribution fund.`;
 								if (conf.contractRewardInUSD)
 									message += ` You will ${rewardInBytes ? 'also ' : ''}receive a reward of $${conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) that will be locked on a smart contract for ${conf.contractTerm} year and can be spent only after ${new Date(vesting_ts).toDateString()}.`;
+								message += "\n" + text.referUser();
 								device.sendMessageToDevice(row.device_address, 'text', message);
 								reward.sendAndWriteReward('attestation', transaction_id);
 								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
@@ -367,7 +368,8 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
 				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
 				device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
-				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+				device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+				return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
 			});
 		}
 		if (text === 'vouchers') {
