@@ -61,10 +61,6 @@ exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
 	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
 };
 
-exports.referUser = () => {
-	return `Now you can earn more rewards by referring more users. Either send them bytes to compensate their attestation fee of $${conf.priceInUSD} or create a voucher and deposit funds to it to share voucher code to unlimited number of users: [new voucher](command:new voucher)`;
-}
-
 exports.vouchersHelp = () => {
 	return `Available voucher commands:\n
 	[new voucher](command:new voucher) - issues new voucher
