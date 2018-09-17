@@ -291,14 +291,17 @@ function handleJumioData(transaction_id, body){
 												let user_id = payload.profile.user_id;
 												if (!user_id)
 													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
+												let amountUSD = conf.referralRewardInUSD+conf.contractReferralRewardInUSD+conf.rewardInUSD;
+												let amount = conversion.getPriceInBytes(amountUSD);
+
 												db.query(
 													`INSERT ${db.getIgnore()} INTO referral_reward_units
 													(transaction_id, user_address, user_id, new_user_address, new_user_id, reward)
 													VALUES (?, ?, ?, ?, ?, ?)`
-													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, referralRewardInBytes+contractReferralRewardInBytes],
+													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${(conf.referralRewardInUSD+conf.contractReferralRewardInUSD).toLocaleString([], {minimumFractionDigits: 2})} (${((referralRewardInBytes+contractReferralRewardInBytes)/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('voucher', transaction_id);
 														unlock();
 													}
@@ -370,6 +373,7 @@ function respond(from_address, text, response){
 				device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
 				return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
 			});
+			return;
 		}
 		if (text === 'vouchers') {
 			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
@@ -416,6 +420,10 @@ function respond(from_address, text, response){
 				if (!voucherInfo) {
 					unlock();
 					return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+				}
+				if (from_address != voucherInfo.device_address) {
+					unlock();
+					return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
 				}
 				if (tokens.length == 3) {
 					let gb_price = tokens[2];
