@@ -71,7 +71,7 @@ exports.vouchersHelp = () => {
 }
 
 exports.signMessage = (user_address, voucher_code) => {
-	return `I'm going to attesta my address ${user_address}. Paying with voucher ${voucher_code}`;
+	return `I'm going to attest my address ${user_address}. Paying with voucher ${voucher_code}`;
 }
 
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
