@@ -31,7 +31,7 @@ exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
 };
 
 exports.listVouchers = (user_address, vouchers) => {
-	let result = `Your vouchers:\n\n`;
+	let result = `Your smart vouchers:\n\n`;
 	const usd_price = conversion.getPriceInBytes(1);
 	for (let voucherInfo of vouchers) {
 		let usd_amount = (voucherInfo.amount / usd_price).toLocaleString([], {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -64,8 +64,8 @@ exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
 exports.vouchersHelp = () => {
 	return `Available smart voucher commands:\n
 	[new voucher](command:new voucher) - issues new smart voucher
-	[vouchers](command:vouchers) - list your vouchers
-	[deposit XXXXXXXXX 0.2](command:deposit) - deposit your smart voucher XXXXXXXXX
+	[vouchers](command:vouchers) - list your smart vouchers
+	[deposit XXXXXXXXX 0.2](command:deposit) - make a deposit to your smart voucher XXXXXXXXX
 	[limit XXXXXXXXX 3](command:limit) - limits number of uses of your voucher XXXXXXXXX per device
 	[withdraw XXXXXXXXX 0.2](command:withdraw) - withdraw funds accumulated on smart voucher XXXXXXXXX`;
 }
