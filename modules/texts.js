@@ -19,7 +19,7 @@ exports.attestNonUS = () => {
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD) => {
-	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address}) or use SmartVoucher, if you have one, to pay for the attestation.`;
+	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address}) or if you have a smart voucher, insert it here.`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
 		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
 	text += ".";
