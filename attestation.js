@@ -7,6 +7,7 @@ const conf = require('byteballcore/conf');
 const db = require('byteballcore/db');
 const eventBus = require('byteballcore/event_bus.js');
 const texts = require('./modules/texts.js');
+const db_migrations = require('./db_migrations.js');
 const validationUtils = require('byteballcore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
@@ -16,11 +17,13 @@ const realNameAttestation = require('./modules/real_name_attestation.js');
 const reward = require('./modules/reward.js');
 const contract = require('./modules/contract.js');
 const discounts = require('./modules/discounts.js');
+const voucher = require('./modules/voucher.js');
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
+const mutex = require('byteballcore/mutex.js');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
@@ -44,7 +47,6 @@ function readUserInfo(device_address, cb) {
 }
 
 function readOrAssignReceivingAddress(device_address, user_address, cb){
-	const mutex = require('byteballcore/mutex.js');
 	mutex.lock([device_address], unlock => {
 		db.query(
 			"SELECT receiving_address, post_publicly, "+db.getUnixTimestamp('last_price_date')+" AS price_ts \n\
@@ -178,14 +180,13 @@ function handleJumioData(transaction_id, body){
 		scan_result = 0;
 		error = data.identityVerification.reason;
 	}
-	const mutex = require('byteballcore/mutex.js');
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		db.query(
 			"UPDATE transactions SET scan_result=?, result_date="+db.getNow()+", extracted_data=? \n\
 			WHERE transaction_id=? AND scan_result IS NULL", 
 			[scan_result, JSON.stringify(body), transaction_id]);
 		db.query(
-			"SELECT user_address, device_address, post_publicly, payment_unit \n\
+			"SELECT user_address, device_address, post_publicly, payment_unit, voucher \n\
 			FROM transactions CROSS JOIN receiving_addresses USING(receiving_address) WHERE transaction_id=?", 
 			[transaction_id],
 			rows => {
@@ -200,7 +201,7 @@ function handleJumioData(transaction_id, body){
 					if (ipCountry === 'US' || ipCountry === 'UNKNOWN')
 						bNonUS = false;
 				}
-				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], () => {
+				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], async () => {
 					row.post_publicly = 0; // override user choice
 					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.post_publicly);
 					if (!row.post_publicly)
@@ -219,7 +220,11 @@ function handleJumioData(transaction_id, body){
 							device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
 					}, 2000);
 					if (conf.rewardInUSD || conf.contractRewardInUSD){
-						let rewardInBytes = conversion.getPriceInBytes(conf.rewardInUSD);
+						let voucherInfo = null;
+						if (row.voucher) {
+							voucherInfo = await voucher.getInfo(row.voucher);
+						}
+						let rewardInBytes = voucherInfo ? 0 : conversion.getPriceInBytes(conf.rewardInUSD);
 						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
 						db.query(
 							"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
@@ -231,43 +236,79 @@ function handleJumioData(transaction_id, body){
 									return unlock();
 								}
 								let [contract_address, vesting_ts] = await contract.createContract(row.user_address, row.device_address);
-								let message = "You were attested for the first time and will receive a welcome bonus of $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.";
+								let message = `You were attested for the first time`;
+								if (rewardInBytes > 0)
+									message += ` and will receive a welcome bonus of $${conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Byteball distribution fund.`;
 								if (conf.contractRewardInUSD)
-									message += "  You will also receive a reward of $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) that will be locked on a smart contract for "+conf.contractTerm+" year and can be spent only after "+new Date(vesting_ts).toDateString()+".";
+									message += ` You will ${rewardInBytes ? 'also ' : ''}receive a reward of $${conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) that will be locked on a smart contract for ${conf.contractTerm} year and can be spent only after ${new Date(vesting_ts).toDateString()}.`;
 								device.sendMessageToDevice(row.device_address, 'text', message);
 								reward.sendAndWriteReward('attestation', transaction_id);
 								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
 									let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
 									let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
-									reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
-										if (!referring_user_address){
-											console.log("no referring user for "+row.user_address);
-											return unlock();
-										}
-										let [referrer_contract_address, referrer_vesting_date_ts] = 
-											await contract.getReferrerContract(referring_user_address, referring_user_device_address);
-										db.query(
-											"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
-											(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
-											[transaction_id, 
-											referring_user_address, referring_user_id, 
-											row.user_address, attestation.profile.user_id, 
-											referralRewardInBytes, contractReferralRewardInBytes], 
-											(res) => {
-												console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-												if (!res.affectedRows){
-													notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
-													return unlock();
+									if (row.payment_unit) {
+										reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
+											if (!referring_user_address){
+												console.log("no referring user for "+row.user_address);
+												return unlock();
+											}
+											let [referrer_contract_address, referrer_vesting_date_ts] = 
+												await contract.getReferrerContract(referring_user_address, referring_user_device_address);
+											db.query(
+												"INSERT "+db.getIgnore()+" INTO referral_reward_units \n\
+												(transaction_id, user_address, user_id, new_user_address, new_user_id, reward, contract_reward) VALUES (?, ?,?, ?,?, ?,?)", 
+												[transaction_id, 
+												referring_user_address, referring_user_id, 
+												row.user_address, attestation.profile.user_id, 
+												referralRewardInBytes, contractReferralRewardInBytes], 
+												(res) => {
+													console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+													if (!res.affectedRows){
+														notifications.notifyAdmin("duplicate referral reward", "referral reward for new user "+row.user_address+" "+attestation.profile.user_id+" already written");
+														return unlock();
+													}
+													let reward_text = referralRewardInBytes
+														? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
+														: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
+													device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity "+reward_text+".  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
+													reward.sendAndWriteReward('referral', transaction_id);
+													unlock();
 												}
-												let reward_text = referralRewardInBytes
-													? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
-													: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund.  The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
-												device.sendMessageToDevice(referring_user_device_address, 'text', "You referred a user who has just verified his identity "+reward_text+".  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!");
-												reward.sendAndWriteReward('referral', transaction_id);
-												unlock();
+											);
+										});
+									} else if (voucherInfo) {
+										db.query(
+											`SELECT payload FROM messages
+											JOIN attestations USING (unit, message_index)
+											WHERE address=? AND attestor_address=?`,
+											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
+											function(rows) {
+												if (!rows.length) {
+													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
+												}
+												let row = rows[0];
+												let payload = JSON.parse(row.payload);
+												let user_id = payload.profile.user_id;
+												if (!user_id)
+													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
+												let amountUSD = conf.referralRewardInUSD+conf.contractReferralRewardInUSD+conf.rewardInUSD;
+												let amount = conversion.getPriceInBytes(amountUSD);
+
+												db.query(
+													`INSERT ${db.getIgnore()} INTO referral_reward_units
+													(transaction_id, user_address, user_id, new_user_address, new_user_id, reward)
+													VALUES (?, ?, ?, ?, ?, ?)`
+													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
+													(res) => {
+														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														reward.sendAndWriteReward('voucher', transaction_id);
+														unlock();
+													}
+												);
 											}
 										);
-									});
+									}
 								}
 							}
 						);
@@ -289,7 +330,7 @@ async function getPriceInUSD(user_address){
 
 function respond(from_address, text, response){
 	let device = require('byteballcore/device.js');
-	readUserInfo(from_address, userInfo => {
+	readUserInfo(from_address, async (userInfo) => {
 		
 		function checkUserAddress(onDone){
 			if (validationUtils.isValidAddress(text)){
@@ -304,17 +345,127 @@ function respond(from_address, text, response){
 				return onDone();
 			onDone(texts.insertMyAddress());
 		}
+
+		function getAttestation(receiving_address) {
+			return new Promise(resolve => {
+				db.query(
+					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
+					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id)
+					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
+			})
+		}
 		
-		if (text === 'req')
-			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
-		if (text === 'testsign')
-			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
+		if (text === 'help')
+			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
+		if (text === 'new voucher') {
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+				let rows = await getAttestation(receiving_address);
+				if (!rows.length)
+					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
+				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
+				device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
+				device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+				return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
+			});
+			return;
+		}
+		if (text === 'vouchers') {
+			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
+			return device.sendMessageToDevice(from_address, 'text', texts.listVouchers(userInfo.user_address, vouchers));
+		}
+		if (text.startsWith('deposit')) {
+			let tokens = text.split(" ");
+			if (tokens.length == 1)
+				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher());
+			let voucher_code = tokens[1];
+			let voucherInfo = await voucher.getInfo(voucher_code);
+			if (!voucherInfo)
+				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+			if (tokens.length == 3) {
+				let usd_price = tokens[2];
+				let price = conversion.getPriceInBytes(usd_price);
+				return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
+			}
+			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
+		}
+		if (text.startsWith('limit')) { // voucher
+			let tokens = text.split(" ");
+			if (tokens.length != 3)
+				return device.sendMessageToDevice(from_address, 'text', texts.limitVoucher());
+			let voucher_code = tokens[1];
+			let limit = tokens[2]|0;
+			let voucherInfo = await voucher.getInfo(voucher_code);
+			if (!voucherInfo)
+				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+			if (limit < 1)
+				return device.sendMessageToDevice(from_address, 'text', `invalid limit: ${limit}, should be > 0`);
+			if (from_address != voucherInfo.device_address)
+				return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
+			await voucher.setLimit(voucherInfo.voucher, limit);
+			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
+		}
+		if (text.startsWith('withdraw')) {
+			let tokens = text.split(" ");
+			if (tokens.length < 2)
+				return device.sendMessageToDevice(from_address, 'text', `format: withdraw VOUCHER amount`);
+			let voucher_code = tokens[1];
+			mutex.lock(['voucher-'+voucher_code], async (unlock) => {
+				let voucherInfo = await voucher.getInfo(voucher_code);
+				if (!voucherInfo) {
+					unlock();
+					return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
+				}
+				if (from_address != voucherInfo.device_address) {
+					unlock();
+					return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
+				}
+				if (tokens.length == 3) {
+					let gb_price = tokens[2];
+					let price = gb_price * 1e9;
+					if (price > voucherInfo.amount) {
+						unlock();
+						return device.sendMessageToDevice(from_address, 'text', `not enough funds on voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but voucher only has ${voucherInfo.amount} bytes`);
+					}
+					let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
+					if (!err)
+						device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(bytes, contract_bytes, await voucher.getInfo(voucher_code)));
+					else
+						device.sendMessageToDevice(from_address, 'text', err);
+					return unlock();
+				}
+				unlock();
+				device.sendMessageToDevice(from_address, 'text', texts.withdrawVoucher(voucherInfo));
+			});
+			return;
+		}
+		if (text.length == 13) { // voucher
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+				let rows = await getAttestation(receiving_address);
+				if (!rows.length) { // not yet attested
+					mutex.lock(['voucher-'+text], async (unlock) => {
+						let voucherInfo = await voucher.getInfo(text);
+						if (!voucherInfo) {
+							unlock();
+							return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+						}
+						unlock();
+						return device.sendMessageToDevice(from_address, 'text', `Using voucher ${text}. Now we need to approve that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
+					});
+				}
+			});
+			return;
+		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
-		if (arrSignedMessageMatches){
+		if (arrSignedMessageMatches){ // signed message received, continue with voucher
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let signedMessageBase64 = arrSignedMessageMatches[1];
 			var validation = require('byteballcore/validation.js');
 			var signedMessageJson = Buffer(signedMessageBase64, 'base64').toString('utf8');
-			console.error(signedMessageJson);
 			try{
 				var objSignedMessage = JSON.parse(signedMessageJson);
 			}
@@ -322,7 +473,70 @@ function respond(from_address, text, response){
 				return null;
 			}
 			validation.validateSignedMessage(objSignedMessage, err => {
-				device.sendMessageToDevice(from_address, 'text', err || 'ok');
+				if (err)
+					return device.sendMessageToDevice(from_address, 'text', `wrong signature`);
+				if (objSignedMessage.authors[0].address !== userInfo.user_address)
+					return device.sendMessageToDevice(from_address, 'text', `You signed the message with a wrong address: ${objSignedMessage.authors[0].address}, expected: ${userInfo.user_address}`);
+				let voucher_code_matches = objSignedMessage.signed_message.match(/.+\s([A-Z2-7]{13})\b/);
+				if (!voucher_code_matches)
+					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
+				let voucher_code = voucher_code_matches[1];
+				if (objSignedMessage.signed_message != texts.signMessage(userInfo.user_address, voucher_code))
+					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
+				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+					let rows = await getAttestation(receiving_address);
+					if (!rows.length) { // not yet attested
+						text = voucher_code;
+						mutex.lock(['voucher-'+text], async (unlock) => {
+							let voucherInfo = await voucher.getInfo(text);
+							if (!voucherInfo) {
+								unlock();
+								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+							}
+							let price = conversion.getPriceInBytes(conf.priceInUSD);
+							if (voucherInfo.amount < price) {
+								unlock();
+								device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
+								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
+							}
+							// voucher limit
+							db.query(`SELECT COUNT(1) AS count FROM transactions
+								JOIN receiving_addresses USING(receiving_address)
+								WHERE voucher=? AND device_address=?`,
+								[voucherInfo.voucher, from_address],
+								function(rows){
+									var count = rows[0].count;
+									if (rows[0].count >= voucherInfo.usage_limit) {
+										unlock();
+										return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+									}
+
+									db.takeConnectionFromPool(async (connection) => {
+										let asyncQuery = (query, params = []) => {
+											return new Promise(resolve => {
+												connection.query(query, params, resolve)
+											})
+										}
+
+										let transaction_id;
+
+										await asyncQuery(`BEGIN TRANSACTION`);
+										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
+										transaction_id = res.insertId;
+										await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+											[voucherInfo.voucher, price]);
+										await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
+										await asyncQuery(`COMMIT`);
+										connection.release();
+										unlock();
+										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+										device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
+									});
+								}
+							);
+						});
+					}
+				});
 			});
 			return;
 		}
@@ -347,60 +561,53 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again')
 					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
-				db.query(
-					"SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address \n\
-					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id) \n\
-					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1", 
-					[receiving_address], 
-					rows => {
-						if (rows.length === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
-						let row = rows[0];
-						let scan_result = row.scan_result;
-						if (scan_result === null)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.underWay());
-						if (scan_result === 0)
-							return device.sendMessageToDevice(from_address, 'text', response + texts.previousAttestationFaled());
-						// scan_result === 1
-						if (text === 'attest non-US'){
-							db.query(
-								"SELECT attestation_unit FROM attestation_units WHERE transaction_id=? AND attestation_type='nonus'", 
-								[row.transaction_id],
-								nonus_rows => {
-									if (nonus_rows.length > 0){ // already exists
-										let attestation_unit = nonus_rows[0].attestation_unit;
-										return device.sendMessageToDevice(from_address, 'text', 
-											response + ( attestation_unit ? texts.alreadyAttestedInUnit(attestation_unit) : texts.underWay() ) );
-									}
-									let data = JSON.parse(row.extracted_data);
-									let cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
-									if (cb_data.idCountry === 'USA')
-										return device.sendMessageToDevice(from_address, 'text', response + "You are an US citizen, can't attest non-US");
-									db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
-										let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
-										realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
-										setTimeout(() => {
-											if (assocAskedForDonation[from_address])
-												return;
-											device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
-											assocAskedForDonation[from_address] = Date.now();
-										}, 2000);
-									});
-								}
-							);
+				let rows = await getAttestation(receiving_address);
+				if (rows.length === 0)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
+				let row = rows[0];
+				let scan_result = row.scan_result;
+				if (scan_result === null)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.underWay());
+				if (scan_result === 0)
+					return device.sendMessageToDevice(from_address, 'text', response + texts.previousAttestationFaled());
+				// scan_result === 1
+				if (text === 'attest non-US'){
+					db.query(
+						"SELECT attestation_unit FROM attestation_units WHERE transaction_id=? AND attestation_type='nonus'", 
+						[row.transaction_id],
+						nonus_rows => {
+							if (nonus_rows.length > 0){ // already exists
+								let attestation_unit = nonus_rows[0].attestation_unit;
+								return device.sendMessageToDevice(from_address, 'text', 
+									response + ( attestation_unit ? texts.alreadyAttestedInUnit(attestation_unit) : texts.underWay() ) );
+							}
+							let data = JSON.parse(row.extracted_data);
+							let cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+							if (cb_data.idCountry === 'USA')
+								return device.sendMessageToDevice(from_address, 'text', response + "You are an US citizen, can't attest non-US");
+							db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
+								let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
+								realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
+								setTimeout(() => {
+									if (assocAskedForDonation[from_address])
+										return;
+									device.sendMessageToDevice(from_address, 'text', texts.pleaseDonate());
+									assocAskedForDonation[from_address] = Date.now();
+								}, 2000);
+							});
 						}
-						else if (text === 'donate yes'){
-							db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
-							device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
-						}
-						else if (text === 'donate no'){
-							db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
-							device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
-						}
-						else
-							device.sendMessageToDevice(from_address, 'text', response + texts.alreadyAttested(row.attestation_date));
-					}
-				);
+					);
+				}
+				else if (text === 'donate yes'){
+					db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
+					device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
+				}
+				else if (text === 'donate no'){
+					db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
+					device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
+				}
+				else
+					device.sendMessageToDevice(from_address, 'text', response + texts.alreadyAttested(row.attestation_date));
 			});
 		});
 	});
@@ -425,35 +632,43 @@ eventBus.once('headless_and_rates_ready', () => {
 	eventBus.on('new_my_transactions', arrUnits => {
 		let device = require('byteballcore/device.js');
 		db.query(
-			"SELECT amount, asset, device_address, receiving_address, user_address, unit, price, "+db.getUnixTimestamp('last_price_date')+" AS price_ts \n\
-			FROM outputs CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address \n\
-			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)",
-			[arrUnits],
+			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts
+			FROM outputs
+			CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address
+			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)
+			UNION -- vouchers deposit / reward
+			SELECT outputs.amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts
+			FROM outputs
+			CROSS JOIN vouchers ON outputs.address=vouchers.receiving_address
+			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
+			[arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
 			
 					async function checkPayment(onDone){
-						let delay = Math.round(Date.now()/1000 - row.price_ts);
-						let bLate = (delay > PRICE_TIMEOUT);
 						if (row.asset !== null)
 							return onDone("Received payment in wrong asset", delay);
-						let objDiscountedPriceInUSD = await getPriceInUSD(row.user_address);
-						let current_price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
-						let expected_amount = bLate ? current_price : row.price;
-						if (row.amount < expected_amount){
-							updatePrice(row.device_address, current_price);
-							let text = "Received "+(row.amount/1e9)+" GB from you";
-							text += bLate 
-								? ".  Your payment is too late and less than the current price.  " 
-								: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
-							return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address, objDiscountedPriceInUSD), delay);
+						if (row.price > 0) {// not voucher
+							let delay = Math.round(Date.now()/1000 - row.price_ts);
+							let bLate = (delay > PRICE_TIMEOUT);
+							let objDiscountedPriceInUSD = await getPriceInUSD(row.user_address);
+							let current_price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
+							let expected_amount = bLate ? current_price : row.price;
+							if (row.amount < expected_amount){
+								updatePrice(row.device_address, current_price);
+								let text = "Received "+(row.amount/1e9)+" GB from you";
+								text += bLate 
+									? ".  Your payment is too late and less than the current price.  " 
+									: ", which is less than the expected "+(row.price/1e9)+" GB.  ";
+								return onDone(text + texts.pleasePay(row.receiving_address, current_price, row.user_address, objDiscountedPriceInUSD), delay);
+							}
 						}
 						db.query("SELECT address FROM unit_authors WHERE unit=?", [row.unit], author_rows => {
 							if (author_rows.length !== 1){
 								resetUserAddress();
 								return onDone("Received a payment but looks like it was not sent from a single-address wallet.  "+texts.switchToSingleAddress());
 							}
-							if (author_rows[0].address !== row.user_address){
+							if (row.price > 0 && author_rows[0].address !== row.user_address){ // only for non-vouchers
 								resetUserAddress();
 								return onDone("Received a payment but it was not sent from the expected address "+row.user_address+".  "+texts.switchToSingleAddress());
 							}
@@ -476,10 +691,17 @@ eventBus.once('headless_and_rates_ready', () => {
 								}
 							);
 						}
-						db.query(
-							"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
-							[row.receiving_address, row.price, row.amount, row.unit]
-						);
+						if (row.price > 0)
+							db.query(
+								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
+								[row.receiving_address, row.price, row.amount, row.unit]
+							);
+						else
+							db.query(
+								`INSERT INTO voucher_transactions (voucher, amount, unit)
+								SELECT voucher, ?, ? FROM vouchers WHERE receiving_address=?`, 
+								[row.amount, row.unit, row.receiving_address]
+							);
 						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation.  It should take 5-10 minutes.");
 					});
 				});
@@ -489,16 +711,37 @@ eventBus.once('headless_and_rates_ready', () => {
 	
 	eventBus.on('my_transactions_became_stable', arrUnits => {
 		let device = require('byteballcore/device.js');
-		db.query(
-			"SELECT transaction_id, device_address, user_address \n\
-			FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
-			WHERE payment_unit IN(?) ",
+		db.query( // transactions
+			`SELECT transaction_id, device_address, user_address
+			FROM transactions JOIN receiving_addresses USING(receiving_address)
+			WHERE payment_unit IN(?)`,
 			[arrUnits],
 			rows => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
 					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to Jumio...");
 					jumio.initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+				});
+			}
+		);
+		db.query( // deposit vouchers
+			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution
+			FROM vouchers
+			JOIN outputs ON outputs.address=vouchers.receiving_address
+			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
+			[reward.distribution_address, arrUnits, arrUnits],
+			rows => {
+				rows.forEach(row => {
+					let deposited = "";
+					let params = [row.amount];
+					if (!row.from_distribution) {
+						deposited = ", amount_deposited=amount_deposited+?";
+						params.push(row.amount);
+					}
+					params.push(row.voucher);
+					db.query(`UPDATE vouchers SET amount=amount+? ${deposited} WHERE voucher=?`, params);
+					if (!row.from_distribution)
+						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
 				});
 			}
 		);
@@ -513,7 +756,7 @@ function pollAndHandleJumioScanData(){
 eventBus.once('headless_wallet_ready', () => {
 	let error = '';
 	let arrTableNames = ['users', 'receiving_addresses', 'transactions', 'attestation_units', 'rejected_payments'];
-	db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?)", [arrTableNames], rows => {
+	db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?)", [arrTableNames], async (rows) => {
 		if (rows.length !== arrTableNames.length)
 			error += texts.errorInitSql();
 
@@ -528,6 +771,8 @@ eventBus.once('headless_wallet_ready', () => {
 
 		if (error)
 			throw new Error(error);
+
+		await db_migrations();
 		
 		let headlessWallet = require('headless-byteball');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {

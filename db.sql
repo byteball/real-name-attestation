@@ -21,13 +21,25 @@ CREATE TABLE receiving_addresses (
 CREATE INDEX byReceivingAddress ON receiving_addresses(receiving_address);
 CREATE INDEX byUserAddress ON receiving_addresses(user_address);
 
+CREATE TABLE vouchers (
+	voucher CHAR(13) NOT NULL PRIMARY KEY,
+	user_address CHAR(32) NOT NULL,
+	device_address CHAR(33) NOT NULL,
+	receiving_address CHAR(32) NOT NULL,
+	usage_limit INT NOT NULL DEFAULT 2,
+	amount INT NOT NULL DEFAULT 0,
+	amount_deposited INT NOT NULL DEFAULT 0,
+	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
+);
+
 
 CREATE TABLE transactions (
 	transaction_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	receiving_address CHAR(32) NOT NULL,
 	price INT NOT NULL,
 	received_amount INT NOT NULL,
-	payment_unit CHAR(44) NOT NULL UNIQUE,
+	payment_unit CHAR(44) NULL UNIQUE,
 	payment_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	is_confirmed INT NOT NULL DEFAULT 0,
 	confirmation_date TIMESTAMP NULL,
@@ -37,8 +49,10 @@ CREATE TABLE transactions (
 	scan_result TINYINT NULL, -- 1 success, 0 failure, NULL pending or abandoned
 	result_date TIMESTAMP NULL,
 	extracted_data VARCHAR(4096) NULL, -- json, nulled after posting the attestation unit
+	voucher CHAR(13) NULL,
 	FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
-	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE
+	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
+	FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE
 );
 CREATE INDEX byScanResult ON transactions(scan_result);
 
@@ -126,3 +140,14 @@ ALTER TABLE reward_units ADD COLUMN donation_unit CHAR(44) NULL;
 CREATE INDEX IF NOT EXISTS reward_units_by_donation ON reward_units(donated, donation_unit);
 
 */
+
+CREATE TABLE voucher_transactions (
+	voucher CHAR(13) NOT NULL,
+	transaction_id INT NULL,
+	amount INT NOT NULL,
+	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	unit CHAR(44) NULL UNIQUE,
+	FOREIGN KEY (voucher) REFERENCES vouchers(voucher),
+	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
+	FOREIGN KEY (unit) REFERENCES units(unit) ON DELETE CASCADE
+);

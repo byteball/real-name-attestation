@@ -2,6 +2,7 @@
 'use strict';
 const desktopApp = require('byteballcore/desktop_app.js');
 const conf = require('byteballcore/conf.js');
+const conversion = require('./conversion.js');
 
 
 exports.greeting = () => {
@@ -18,12 +19,60 @@ exports.attestNonUS = () => {
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD) => {
-	let text = "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address=single"+user_address+")";
+	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address}) or if you have a smart voucher, insert it here.`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
 		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
 	text += ".";
 	return text;
 };
+
+exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
+	return `To deposit voucher ${voucher} for e.g. $${amount}, send message using following format: [deposit ${voucher} ${amount}](suggest-command:deposit ${voucher} ${amount}). Remember that each verification costs $${conf.priceInUSD} and bytes price is volatile, so safeguard your voucher by depositing a bit more. You can withdraw the amount you deposited from the voucher anytime you want.`;
+};
+
+exports.listVouchers = (user_address, vouchers) => {
+	let result = `Here is a list of all your vouchers for the address ${user_address}:\n\n`;
+	const usd_price = conversion.getPriceInBytes(1);
+	for (let voucherInfo of vouchers) {
+		let usd_amount = (voucherInfo.amount / usd_price).toLocaleString([], {minimumFractionDigits: 2, maximumFractionDigits: 2});
+		let gb_amount = (voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9});
+		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit...](command:deposit ${voucherInfo.voucher}) | [withdraw...](command:withdraw ${voucherInfo.voucher})\n\n`;
+	}
+	return result;
+};
+
+exports.withdrawVoucher = (voucherInfo) => {
+	const gb_amount = (voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	const deposited_amount = (voucherInfo.amount_deposited/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	return `Voucher balance is ${gb_amount} GB, You have deposited ${deposited_amount} GB to this voucher and can claim it back to your wallet instantly. If you want to withdraw more than that, amount exceeding ${deposited_amount} GB will be sent to your contract, as it is your referrer reward. [withdraw ${voucherInfo.voucher} ${deposited_amount}](suggest-command:withdraw ${voucherInfo.voucher} ${deposited_amount})`;
+};
+
+exports.withdrawComplete = (bytes = 0, contract_bytes = 0, voucherInfo) => {
+	let gb = (bytes/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	let contract_gb = (contract_bytes/1e9).toLocaleString([], {maximumFractionDigits: 9});
+	return `We sent you a total of ${gb+contract_gb} GB from your voucher ${voucherInfo.voucher}. ` + (gb ? `${gb} GB was sent to your address ${voucherInfo.user_address}` : ``) + (contract_gb ? `${(gb && contract_gb ? ` and`:'')} ${contract_gb} GB was sent to contract with you.` : ``);
+};
+
+exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
+	return `To limit number of voucher uses per device, send message using following format: [limit ${voucher} ${amount+1}](suggest-command:limit ${voucher} ${amount+1}). Current limit: ${amount}`;
+};
+
+exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
+	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
+};
+
+exports.vouchersHelp = () => {
+	return `Available voucher commands:\n
+	[new voucher](command:new voucher) - issues new voucher
+	[vouchers](command:vouchers) - list your vouchers
+	[deposit XXXXXXXXX 0.2](command:deposit) - deposit your voucher XXXXXXXXX
+	[limit XXXXXXXXX 3](command:limit) - limits number of uses of your voucher XXXXXXXXX per device
+	[withdraw XXXXXXXXX 0.2](command:withdraw) - withdraw funds accumulated on voucher XXXXXXXXX`;
+}
+
+exports.signMessage = (user_address, voucher_code) => {
+	return `I'm going to attest my address ${user_address}. Paying with voucher ${voucher_code}`;
+}
 
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
 	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD);
