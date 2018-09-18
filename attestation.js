@@ -729,7 +729,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
-			[reward.distribution_address, arrUnits, arrUnits],
+			[reward.distribution_address, arrUnits],
 			rows => {
 				rows.forEach(row => {
 					let deposited = "";
