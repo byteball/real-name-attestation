@@ -19,7 +19,7 @@ exports.attestNonUS = () => {
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD) => {
-	let text = "Please pay for the attestation: [attestation payment](byteball:"+receiving_address+"?amount="+price+"&single_address=single"+user_address+")";
+	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address}) or use SmartVoucher, if you have one, to pay for the attestation.`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
 		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
 	text += ".";
@@ -68,6 +68,10 @@ exports.vouchersHelp = () => {
 	[deposit XXXXXXXXX 0.2](command:deposit) - deposit your voucher XXXXXXXXX
 	[limit XXXXXXXXX 3](command:limit) - limits number of uses of your voucher XXXXXXXXX per device
 	[withdraw XXXXXXXXX 0.2](command:withdraw) - withdraw funds accumulated on voucher XXXXXXXXX`;
+}
+
+exports.signMessage = (user_address, voucher_code) => {
+	return `I'm going to attesta my address ${user_address}. Paying with voucher ${voucher_code}`;
 }
 
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {

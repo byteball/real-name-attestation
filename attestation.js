@@ -355,12 +355,8 @@ function respond(from_address, text, response){
 			})
 		}
 		
-		if (text === 'req')
-			return device.sendMessageToDevice(from_address, 'text', "test req [req](profile-request:first_name,last_name,country)");
 		if (text === 'help')
 			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
-		if (text === 'testsign')
-			return device.sendMessageToDevice(from_address, 'text', "test sig [s](sign-message-request:Testing signed messages)");
 		if (text === 'new voucher') {
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
@@ -456,58 +452,20 @@ function respond(from_address, text, response){
 							unlock();
 							return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 						}
-						let price = conversion.getPriceInBytes(conf.priceInUSD);
-						if (voucherInfo.amount < price) {
-							unlock();
-							device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
-							return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
-						}
-						// voucher limit
-						db.query(`SELECT COUNT(1) AS count FROM transactions
-							JOIN receiving_addresses USING(receiving_address)
-							WHERE voucher=? AND device_address=?`,
-							[voucherInfo.voucher, from_address],
-							function(rows){
-								var count = rows[0].count;
-								if (rows[0].count >= voucherInfo.usage_limit) {
-									unlock();
-									return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
-								}
-
-								db.takeConnectionFromPool(async (connection) => {
-									let asyncQuery = (query, params = []) => {
-										return new Promise(resolve => {
-											connection.query(query, params, resolve)
-										})
-									}
-
-									let transaction_id;
-
-									await asyncQuery(`BEGIN TRANSACTION`);
-									let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
-									transaction_id = res.insertId;
-									await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-										[voucherInfo.voucher, price]);
-									await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
-									await asyncQuery(`COMMIT`);
-									connection.release();
-									unlock();
-									jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
-									device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
-								});
-							}
-						);
+						unlock();
+						return device.sendMessageToDevice(from_address, 'text', `Using voucher ${text}. Now we need to approve that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 					});
 				}
 			});
 			return;
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
-		if (arrSignedMessageMatches){
+		if (arrSignedMessageMatches){ // signed message received, continue with voucher
+			if (!userInfo.user_address)
+				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let signedMessageBase64 = arrSignedMessageMatches[1];
 			var validation = require('byteballcore/validation.js');
 			var signedMessageJson = Buffer(signedMessageBase64, 'base64').toString('utf8');
-			console.error(signedMessageJson);
 			try{
 				var objSignedMessage = JSON.parse(signedMessageJson);
 			}
@@ -515,7 +473,70 @@ function respond(from_address, text, response){
 				return null;
 			}
 			validation.validateSignedMessage(objSignedMessage, err => {
-				device.sendMessageToDevice(from_address, 'text', err || 'ok');
+				if (err)
+					return device.sendMessageToDevice(from_address, 'text', `wrong signature`);
+				if (objSignedMessage.authors[0].address !== userInfo.user_address)
+					return device.sendMessageToDevice(from_address, 'text', `You signed the message with a wrong address: ${objSignedMessage.authors[0].address}, expected: ${userInfo.user_address}`);
+				let voucher_code_matches = objSignedMessage.signed_message.match(/.+\s([A-Z2-7]{13})\b/);
+				if (!voucher_code_matches)
+					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
+				let voucher_code = voucher_code_matches[1];
+				if (objSignedMessage.signed_message != texts.signMessage(userInfo.user_address, voucher_code))
+					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
+				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
+					let rows = await getAttestation(receiving_address);
+					if (!rows.length) { // not yet attested
+						text = voucher_code;
+						mutex.lock(['voucher-'+text], async (unlock) => {
+							let voucherInfo = await voucher.getInfo(text);
+							if (!voucherInfo) {
+								unlock();
+								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+							}
+							let price = conversion.getPriceInBytes(conf.priceInUSD);
+							if (voucherInfo.amount < price) {
+								unlock();
+								device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
+								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
+							}
+							// voucher limit
+							db.query(`SELECT COUNT(1) AS count FROM transactions
+								JOIN receiving_addresses USING(receiving_address)
+								WHERE voucher=? AND device_address=?`,
+								[voucherInfo.voucher, from_address],
+								function(rows){
+									var count = rows[0].count;
+									if (rows[0].count >= voucherInfo.usage_limit) {
+										unlock();
+										return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+									}
+
+									db.takeConnectionFromPool(async (connection) => {
+										let asyncQuery = (query, params = []) => {
+											return new Promise(resolve => {
+												connection.query(query, params, resolve)
+											})
+										}
+
+										let transaction_id;
+
+										await asyncQuery(`BEGIN TRANSACTION`);
+										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
+										transaction_id = res.insertId;
+										await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
+											[voucherInfo.voucher, price]);
+										await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
+										await asyncQuery(`COMMIT`);
+										connection.release();
+										unlock();
+										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+										device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
+									});
+								}
+							);
+						});
+					}
+				});
 			});
 			return;
 		}
