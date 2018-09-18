@@ -301,7 +301,7 @@ function handleJumioData(transaction_id, body){
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('voucher', transaction_id);
 														unlock();
 													}
@@ -365,9 +365,7 @@ function respond(from_address, text, response){
 				if (!rows.length)
 					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
 				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
-				device.sendMessageToDevice(from_address, 'text', `New voucher: ${voucher_code}`);
-				device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
-				return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
+				device.sendMessageToDevice(from_address, 'text', `New smart voucher: ${voucher_code}\n\n` + texts.depositVoucher(voucher_code) + '\n\n' + texts.vouchersHelp());
 			});
 			return;
 		}
@@ -402,9 +400,9 @@ function respond(from_address, text, response){
 			if (limit < 1)
 				return device.sendMessageToDevice(from_address, 'text', `invalid limit: ${limit}, should be > 0`);
 			if (from_address != voucherInfo.device_address)
-				return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
+				return device.sendMessageToDevice(from_address, 'text', `its not your smart voucher!`);
 			await voucher.setLimit(voucherInfo.voucher, limit);
-			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for voucher ${voucher_code}`);
+			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for smart voucher ${voucher_code}`);
 		}
 		if (text.startsWith('withdraw')) {
 			let tokens = text.split(" ");
@@ -419,14 +417,14 @@ function respond(from_address, text, response){
 				}
 				if (from_address != voucherInfo.device_address) {
 					unlock();
-					return device.sendMessageToDevice(from_address, 'text', `its not your voucher!`);
+					return device.sendMessageToDevice(from_address, 'text', `its not your smart voucher!`);
 				}
 				if (tokens.length == 3) {
 					let gb_price = tokens[2];
 					let price = gb_price * 1e9;
 					if (price > voucherInfo.amount) {
 						unlock();
-						return device.sendMessageToDevice(from_address, 'text', `not enough funds on voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but voucher only has ${voucherInfo.amount} bytes`);
+						return device.sendMessageToDevice(from_address, 'text', `not enough funds on smart voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but smart voucher only has ${voucherInfo.amount} bytes`);
 					}
 					let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
 					if (!err)
@@ -453,7 +451,7 @@ function respond(from_address, text, response){
 							return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 						}
 						unlock();
-						return device.sendMessageToDevice(from_address, 'text', `Using voucher ${text}. Now we need to approve that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
+						device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 					});
 				}
 			});
@@ -496,8 +494,8 @@ function respond(from_address, text, response){
 							let price = conversion.getPriceInBytes(conf.priceInUSD);
 							if (voucherInfo.amount < price) {
 								unlock();
-								device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
-								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
+								device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user tried to attest using your smart voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
+								return device.sendMessageToDevice(from_address, 'text', `Smart voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
 							}
 							// voucher limit
 							db.query(`SELECT COUNT(1) AS count FROM transactions
@@ -508,7 +506,7 @@ function respond(from_address, text, response){
 									var count = rows[0].count;
 									if (rows[0].count >= voucherInfo.usage_limit) {
 										unlock();
-										return device.sendMessageToDevice(from_address, 'text', `you reached the limit of uses for voucher ${text}`);
+										return device.sendMessageToDevice(from_address, 'text', `You reached the limit of uses for voucher ${text}`);
 									}
 
 									db.takeConnectionFromPool(async (connection) => {
@@ -530,7 +528,7 @@ function respond(from_address, text, response){
 										connection.release();
 										unlock();
 										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
-										device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone used your voucher ${text}, new voucher balance ${voucherInfo.amount}`);
+										device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user has just used your smart voucher ${text} to pay for attestation, new voucher balance ${voucherInfo.amount}`);
 									});
 								}
 							);

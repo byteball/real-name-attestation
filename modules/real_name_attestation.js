@@ -171,7 +171,7 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 								text += "\n\nClick here to save the profile in your wallet: [private profile](profile:"+base64PrivateProfile+").  You will be able to use it to access the services that require a proven identity.";
 							}
 							if (attestation_type === 'real name')
-								text += `\n\nRemember, we have a referral program: if you send Bytes from your attested address to a new user who is not attested yet, and he/she uses those Bytes to pay for a successful attestation, you receive a $${conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} reward in Bytes paid to your smart contract address.\nYou can also create a smart voucher and deposit funds to it to share voucher code to unlimited number of users: [new voucher](command:new voucher) and receive rewards for every user whos attestation was paid with your smart voucher`;
+								text += `\n\nRemember, we have a referral program: if you send Bytes from your attested address to a new user who is not attested yet, and he/she uses those Bytes to pay for a successful attestation, you receive a $${conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} reward in Bytes paid to your smart contract address.\nYou can also create a smart voucher and deposit funds to it, then share the voucher code to unlimited number of users and receive rewards for every user whose attestation was paid with your smart voucher: [new voucher](command:new voucher)`;
 							device.sendMessageToDevice(row.device_address, 'text', text);
 							unlock();
 						}
