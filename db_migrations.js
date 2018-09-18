@@ -15,6 +15,7 @@ module.exports = function() {
 					}
 					let arrQueries = [];
 					connection.addQuery(arrQueries, `BEGIN TRANSACTION`);
+					connection.addQuery(arrQueries, `PRAGMA foreign_keys = OFF`);
 					connection.addQuery(arrQueries, `CREATE TABLE vouchers (
 							voucher CHAR(13) NOT NULL PRIMARY KEY,
 							user_address CHAR(32) NOT NULL,
@@ -60,6 +61,7 @@ module.exports = function() {
 					connection.addQuery(arrQueries, `INSERT INTO transactions_new SELECT *, NULL FROM transactions`);
 					connection.addQuery(arrQueries, `DROP TABLE transactions`);
 					connection.addQuery(arrQueries, `ALTER TABLE transactions_new RENAME TO transactions`);
+					connection.addQuery(arrQueries, `PRAGMA foreign_keys = ON`);
 					connection.addQuery(arrQueries, `COMMIT`);
 					require('async').series(arrQueries, function(){
 						connection.release();
