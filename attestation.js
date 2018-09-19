@@ -494,7 +494,7 @@ function respond(from_address, text, response){
 								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 							}
 							let price = conversion.getPriceInBytes(conf.priceInUSD);
-							if (false && voucherInfo.amount < price) {
+							if (voucherInfo.amount < price) {
 								unlock();
 								device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user tried to attest using your smart voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
 								return device.sendMessageToDevice(from_address, 'text', `Smart voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
