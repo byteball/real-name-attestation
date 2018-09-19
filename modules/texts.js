@@ -32,7 +32,7 @@ exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
 
 exports.voucherDeposited = (voucher, amount) => {
 	const bytes_price = conversion.getPriceInBytes(conf.priceInUSD);
-	return `Your payment is confirmed. Now the balance of voucher ${voucher} is ${amount} which is enough for ${Math.floor(amount / bytes_price)} attestations at the current exchange rate. Send the voucher to your friends to help them get attested and earn referral rewards. The rewards will be paid back to your voucher and you can later withdraw them.`;
+	return `Your payment is confirmed. Now the balance of voucher ${voucher} is ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB which is enough for ${Math.floor(amount / bytes_price)} attestations at the current exchange rate. Send the voucher to your friends to help them get attested and earn referral rewards. The rewards will be paid back to your voucher and you can later withdraw them.`;
 };
 
 exports.listVouchers = (user_address, vouchers) => {
