@@ -445,7 +445,7 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
 				let rows = await getAttestation(receiving_address);
-				if (!rows.length) { // not yet attested
+				if (!rows.length || rows[0].scan_result === 0) { // not yet attested
 					mutex.lock(['voucher-'+text], async (unlock) => {
 						let voucherInfo = await voucher.getInfo(text);
 						if (!voucherInfo) {
@@ -485,7 +485,7 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
 				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
 					let rows = await getAttestation(receiving_address);
-					if (!rows.length) { // not yet attested
+					if (!rows.length || rows[0].scan_result === 0) { // not yet attested
 						text = voucher_code;
 						mutex.lock(['voucher-'+text], async (unlock) => {
 							let voucherInfo = await voucher.getInfo(text);
