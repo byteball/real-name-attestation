@@ -371,6 +371,8 @@ function respond(from_address, text, response){
 		}
 		if (text === 'vouchers') {
 			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
+			if (!vouchers.length)
+				return device.sendMessageToDevice(from_address, 'text', texts.noVouchers());
 			return device.sendMessageToDevice(from_address, 'text', texts.listVouchers(userInfo.user_address, vouchers));
 		}
 		if (text.startsWith('deposit')) {
@@ -443,7 +445,7 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
 				let rows = await getAttestation(receiving_address);
-				if (!rows.length) { // not yet attested
+				if (!rows.length || rows[0].scan_result === 0) { // not yet attested
 					mutex.lock(['voucher-'+text], async (unlock) => {
 						let voucherInfo = await voucher.getInfo(text);
 						if (!voucherInfo) {
@@ -453,7 +455,10 @@ function respond(from_address, text, response){
 						unlock();
 						device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 					});
-				}
+				} else if (rows[0].scan_result === 1)
+					return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
+				else 
+					return device.sendMessageToDevice(from_address, 'text', texts.underWay());
 			});
 			return;
 		}
@@ -483,7 +488,7 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
 				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
 					let rows = await getAttestation(receiving_address);
-					if (!rows.length) { // not yet attested
+					if (!rows.length || rows[0].scan_result === 0) { // not yet attested
 						text = voucher_code;
 						mutex.lock(['voucher-'+text], async (unlock) => {
 							let voucherInfo = await voucher.getInfo(text);
@@ -519,10 +524,10 @@ function respond(from_address, text, response){
 										let transaction_id;
 
 										await asyncQuery(`BEGIN TRANSACTION`);
-										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
+										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount, signed_message) VALUES (?, ?, 0, 0, ?)`, [receiving_address, voucherInfo.voucher, signedMessageJson]);
 										transaction_id = res.insertId;
 										await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-											[voucherInfo.voucher, price]);
+											[voucherInfo.voucher, -price]);
 										await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
 										await asyncQuery(`COMMIT`);
 										connection.release();
@@ -533,7 +538,10 @@ function respond(from_address, text, response){
 								}
 							);
 						});
-					}
+					} else if (rows[0].scan_result === 1)
+						return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
+					else 
+						return device.sendMessageToDevice(from_address, 'text', texts.underWay());
 				});
 			});
 			return;
@@ -723,13 +731,15 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution
+			`SELECT voucher, vouchers.amount AS old_amount, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution, (SELECT 1 FROM unit_authors WHERE unit=outputs.unit AND address=vouchers.receiving_address) AS is_change
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
 			[reward.distribution_address, arrUnits],
 			rows => {
 				rows.forEach(row => {
+					if (row.is_change)
+						return;
 					let deposited = "";
 					let params = [row.amount];
 					if (!row.from_distribution) {
@@ -739,7 +749,7 @@ eventBus.once('headless_and_rates_ready', () => {
 					params.push(row.voucher);
 					db.query(`UPDATE vouchers SET amount=amount+? ${deposited} WHERE voucher=?`, params);
 					if (!row.from_distribution)
-						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
+						device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
 				});
 			}
 		);

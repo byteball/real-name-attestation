@@ -30,6 +30,11 @@ exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
 	return `To deposit your smart voucher ${voucher} for e.g. $${amount}, send a message using the following format: [deposit ${voucher} ${amount}](suggest-command:deposit ${voucher} ${amount}). Remember that each verification costs $${conf.priceInUSD} and bytes price is volatile, so safeguard your smart voucher by depositing a bit more. You can withdraw the deposited amount from the smart voucher at any time.`;
 };
 
+exports.voucherDeposited = (voucher, amount) => {
+	const bytes_price = conversion.getPriceInBytes(conf.priceInUSD);
+	return `Your payment is confirmed. Now the balance of voucher ${voucher} is ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB which is enough for ${Math.floor(amount / bytes_price)} attestations at the current exchange rate. Send the voucher to your friends to help them get attested and earn referral rewards. The rewards will be paid back to your voucher and you can later withdraw them.`;
+};
+
 exports.listVouchers = (user_address, vouchers) => {
 	let result = `Your smart vouchers:\n\n`;
 	const usd_price = conversion.getPriceInBytes(1);
@@ -39,6 +44,10 @@ exports.listVouchers = (user_address, vouchers) => {
 		result += `${voucherInfo.voucher} – ${gb_amount} GB ($${usd_amount})\n[deposit...](command:deposit ${voucherInfo.voucher}) | [withdraw...](command:withdraw ${voucherInfo.voucher})\n\n`;
 	}
 	return result;
+};
+
+exports.noVouchers = () => {
+	return `You currently have no vouchers. [Create one](command:new voucher)?`;
 };
 
 exports.withdrawVoucher = (voucherInfo) => {

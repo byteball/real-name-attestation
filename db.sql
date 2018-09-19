@@ -50,6 +50,7 @@ CREATE TABLE transactions (
 	result_date TIMESTAMP NULL,
 	extracted_data VARCHAR(4096) NULL, -- json, nulled after posting the attestation unit
 	voucher CHAR(13) NULL,
+	signed_message TEXT NULL,
 	FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
 	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
 	FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE

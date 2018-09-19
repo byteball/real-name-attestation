@@ -84,7 +84,7 @@ function withdraw(voucherInfo, amount) {
 			db.query(`UPDATE vouchers SET amount=amount-?, amount_deposited=amount_deposited-? WHERE voucher=?`, [bytes+contract_bytes, bytes, voucherInfo.voucher], () => {
 				db.query(
 					`INSERT INTO voucher_transactions (voucher, amount, unit) VALUES (?, ?, ?)`, 
-					[voucherInfo.voucher, bytes+contract_bytes, unit]
+					[voucherInfo.voucher, -(bytes+contract_bytes), unit]
 				);
 				resolve([null, bytes, contract_bytes])});
 		});
