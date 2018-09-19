@@ -373,6 +373,8 @@ function respond(from_address, text, response){
 		}
 		if (text === 'vouchers') {
 			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
+			if (!vouchers.length)
+				return device.sendMessageToDevice(from_address, 'text', texts.noVouchers());
 			return device.sendMessageToDevice(from_address, 'text', texts.listVouchers(userInfo.user_address, vouchers));
 		}
 		if (text.startsWith('deposit')) {
@@ -494,7 +496,7 @@ function respond(from_address, text, response){
 								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 							}
 							let price = conversion.getPriceInBytes(conf.priceInUSD);
-							if (voucherInfo.amount < price) {
+							if (false && voucherInfo.amount < price) {
 								unlock();
 								device.sendMessageToDevice(voucherInfo.device_address, 'text', `Someone tried to attest using your voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
 								return device.sendMessageToDevice(from_address, 'text', `voucher ${text} does not have enough funds, we notified the owner of this voucher.`);
@@ -521,10 +523,10 @@ function respond(from_address, text, response){
 										let transaction_id;
 
 										await asyncQuery(`BEGIN TRANSACTION`);
-										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount) VALUES (?, ?, 0, 0)`, [receiving_address, voucherInfo.voucher]);
+										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount, signed_message) VALUES (?, ?, 0, 0, ?)`, [receiving_address, voucherInfo.voucher, signedMessageJson]);
 										transaction_id = res.insertId;
 										await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
-											[voucherInfo.voucher, price]);
+											[voucherInfo.voucher, -price]);
 										await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
 										await asyncQuery(`COMMIT`);
 										connection.release();
@@ -725,13 +727,15 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution
+			`SELECT voucher, vouchers.amount AS old_amount, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution, (SELECT 1 FROM unit_authors WHERE unit=outputs.unit AND address=vouchers.receiving_address) AS is_change
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
 			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
 			[reward.distribution_address, arrUnits, arrUnits],
 			rows => {
 				rows.forEach(row => {
+					if (row.is_change)
+						return;
 					let deposited = "";
 					let params = [row.amount];
 					if (!row.from_distribution) {
@@ -741,7 +745,7 @@ eventBus.once('headless_and_rates_ready', () => {
 					params.push(row.voucher);
 					db.query(`UPDATE vouchers SET amount=amount+? ${deposited} WHERE voucher=?`, params);
 					if (!row.from_distribution)
-						device.sendMessageToDevice(row.device_address, 'text', `Your payment is confirmed`);
+						device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
 				});
 			}
 		);
