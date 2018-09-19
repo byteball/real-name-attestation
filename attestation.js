@@ -455,7 +455,10 @@ function respond(from_address, text, response){
 						unlock();
 						device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 					});
-				}
+				} else if (rows[0].scan_result === 1)
+					return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
+				else 
+					return device.sendMessageToDevice(from_address, 'text', texts.underWay());
 			});
 			return;
 		}
@@ -535,7 +538,10 @@ function respond(from_address, text, response){
 								}
 							);
 						});
-					}
+					} else if (rows[0].scan_result === 1)
+						return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
+					else 
+						return device.sendMessageToDevice(from_address, 'text', texts.underWay());
 				});
 			});
 			return;
