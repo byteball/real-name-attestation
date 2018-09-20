@@ -18,8 +18,10 @@ exports.attestNonUS = () => {
 	return "You are a non-US citizen.  Do you want this fact to be also attested?  This information will be public, i.e. everybody will be able to see that your Byteball address belongs to a non-US citizen, but nothing else will be disclosed.\n\n[Yes, attest that I'm a non-US citizen](command:attest non-US)";
 };
 
-exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD) => {
-	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address}) or if you have a smart voucher, insert it here.`;
+exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
+	let text = `Please pay for the attestation: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
+	if (!have_attestation)
+		text += `or if you have a smart voucher, insert it here.`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
 		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
 	text += ".";
@@ -83,8 +85,8 @@ exports.signMessage = (user_address, voucher_code) => {
 	return `I'm going to attest my address ${user_address}. Paying with smart voucher ${voucher_code}`;
 }
 
-exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD) => {
-	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD);
+exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD, have_attestation) => {
+	return (post_publicly === null) ? exports.privateOrPublic() : exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation);
 };
 
 exports.insertMyAddress = () => {

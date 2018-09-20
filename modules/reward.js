@@ -34,55 +34,56 @@ function sendReward(outputs, device_address, onDone){
 
 function sendAndWriteReward(reward_type, transaction_id){
 	const mutex = require('byteballcore/mutex.js');
-	let sql, table;
-	if (reward_type == "voucher") {
-		table = 'referral_reward_units';
-		sql = `SELECT device_address, reward_date, reward, vouchers.receiving_address AS user_address
-			FROM ${table}
-			JOIN transactions USING(transaction_id)
-			JOIN vouchers USING(voucher)
-			WHERE transaction_id=?`;
-	} else {
-		table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
-		sql = `SELECT receiving_addresses.device_address, reward_date, reward, ${table}.user_address, contract_reward, contract_address
-			FROM ${table}
-			JOIN transactions USING(transaction_id)
-			JOIN receiving_addresses USING(receiving_address)
-			LEFT JOIN contracts ON ${table}.user_address=contracts.user_address
-			WHERE transaction_id=?`;
-	}
 	mutex.lock(['tx-'+transaction_id], unlock => {
-		db.query(sql, [transaction_id], 
-			rows => {
-				if (rows.length === 0)
-					throw Error("no record in "+table+" for tx "+transaction_id);
-				let row = rows[0];
-				if (row.reward_date) // already sent
-					return unlock();
-				if (row.contract_reward && !row.contract_address)
-					throw Error("no contract address for reward "+reward_type+" "+transaction_id);
-				let outputs = [];
-				if (row.reward)
-					outputs.push({address: row.user_address, amount: row.reward});
-				if (row.contract_reward)
-					outputs.push({address: row.contract_address, amount: row.contract_reward});
-				if (outputs.length === 0)
-					throw Error("no rewards in tx "+reward_type+" "+transaction_id);
-				sendReward(outputs, row.device_address, (err, unit) => {
-					if (err)
+		db.query("SELECT voucher FROM transactions WHERE transaction_id=?", [transaction_id], (rows) => {
+			let table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
+			let sql;
+			if (rows[0].voucher)
+				sql = `SELECT device_address, reward_date, reward, vouchers.receiving_address AS user_address
+				FROM ${table}
+				JOIN transactions USING(transaction_id)
+				JOIN vouchers USING(voucher)
+				WHERE transaction_id=?`;
+			else
+				sql = `SELECT receiving_addresses.device_address, reward_date, reward, ${table}.user_address, contract_reward, contract_address
+				FROM ${table}
+				JOIN transactions USING(transaction_id)
+				JOIN receiving_addresses USING(receiving_address)
+				LEFT JOIN contracts ON ${table}.user_address=contracts.user_address
+				WHERE transaction_id=?`;
+
+			db.query(sql, [transaction_id], 
+				rows => {
+					if (rows.length === 0)
+						throw Error("no record in "+table+" for tx "+transaction_id);
+					let row = rows[0];
+					if (row.reward_date) // already sent
 						return unlock();
-					db.query(
-						"UPDATE "+table+" SET reward_unit=?, reward_date="+db.getNow()+" WHERE transaction_id=?", 
-						[unit, transaction_id], 
-						() => {
-							let device = require('byteballcore/device.js');
-							device.sendMessageToDevice(row.device_address, 'text', "Sent the "+reward_type+" reward");
-							unlock();
-						}
-					);
-				});
-			}
-		);
+					if (row.contract_reward && !row.contract_address)
+						throw Error("no contract address for reward "+reward_type+" "+transaction_id);
+					let outputs = [];
+					if (row.reward)
+						outputs.push({address: row.user_address, amount: row.reward});
+					if (row.contract_reward)
+						outputs.push({address: row.contract_address, amount: row.contract_reward});
+					if (outputs.length === 0)
+						throw Error("no rewards in tx "+reward_type+" "+transaction_id);
+					sendReward(outputs, row.device_address, (err, unit) => {
+						if (err)
+							return unlock();
+						db.query(
+							"UPDATE "+table+" SET reward_unit=?, reward_date="+db.getNow()+" WHERE transaction_id=?", 
+							[unit, transaction_id], 
+							() => {
+								let device = require('byteballcore/device.js');
+								device.sendMessageToDevice(row.device_address, 'text', "Sent the "+reward_type+" reward");
+								unlock();
+							}
+						);
+					});
+				}
+			);
+		});
 	});
 }
 
