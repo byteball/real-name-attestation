@@ -37,7 +37,7 @@ function sendAndWriteReward(reward_type, transaction_id){
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		let table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
 		let	sql = `SELECT
-				COALECE(vouchers.device_address, receiving_addresses.device_address) AS device_address,
+				COALESCE(vouchers.device_address, receiving_addresses.device_address) AS device_address,
 				reward_date,
 				reward,
 				COALESCE(vouchers.receiving_address, ${table}.user_address) AS user_address,
