@@ -280,14 +280,14 @@ function handleJumioData(transaction_id, body){
 										db.query(
 											`SELECT payload FROM messages
 											JOIN attestations USING (unit, message_index)
-											WHERE address=? AND attestor_address=?`,
+											WHERE address=? AND attestor_address=?
+											ORDER BY rowid DESC LIMIT 1`,
 											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
 											function(rows) {
 												if (!rows.length) {
 													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
 												}
-												let row = rows[0];
-												let payload = JSON.parse(row.payload);
+												let payload = JSON.parse(rows[0].payload);
 												let user_id = payload.profile.user_id;
 												if (!user_id)
 													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
