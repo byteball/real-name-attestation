@@ -301,7 +301,7 @@ function handleJumioData(transaction_id, body){
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
