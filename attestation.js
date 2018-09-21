@@ -753,7 +753,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			[arrUnits],
 			rows => {
 				rows.forEach(row => {
-					db.query(`UPDATE vouchers SET amount=amount+?, amount_deposited=amount_deposited+? WHERE voucher=?`, [row.amount, row.voucher]);
+					db.query(`UPDATE vouchers SET amount=amount+?, amount_deposited=amount_deposited+? WHERE voucher=?`, [row.amount, row.amount, row.voucher]);
 					device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
 				});
 			}
