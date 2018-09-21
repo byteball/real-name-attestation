@@ -644,6 +644,7 @@ eventBus.once('headless_and_rates_ready', () => {
 	
 	eventBus.on('new_my_transactions', arrUnits => {
 		let device = require('byteballcore/device.js');
+		console.log("new_my_transactions units:", arrUnits);
 		db.query(
 			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL
 			FROM outputs
@@ -657,6 +658,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN vouchers ON vouchers.receiving_address=unit_authors.address WHERE unit_authors.unit=outputs.unit)`,
 			[arrUnits, reward.distribution_address, arrUnits],
 			rows => {
+				console.log("new_my_transactions rows: ", rows);
 				rows.forEach(row => {
 			
 					async function checkPayment(onDone){
@@ -705,6 +707,7 @@ eventBus.once('headless_and_rates_ready', () => {
 								}
 							);
 						}
+
 						if (row.price > 0)
 							db.query(
 								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
@@ -718,7 +721,7 @@ eventBus.once('headless_and_rates_ready', () => {
 							);
 							if (row.from_distribution) {
 								db.query(`
-									UPDATE vouchers SET amount=amount+?	WHERE voucher=(SELECT voucher FROM vouchers WHERE receiving_address=?)`,
+									UPDATE vouchers SET amount=amount+?	WHERE receiving_address=?)`,
 									[row.amount, row.receiving_address]);
 								return;
 							}
@@ -753,7 +756,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			[arrUnits],
 			rows => {
 				rows.forEach(row => {
-					db.query(`UPDATE vouchers SET amount=amount+?, amount_deposited=amount_deposited+? WHERE voucher=?`, [row.amount, row.voucher]);
+					db.query(`UPDATE vouchers SET amount=amount+?, amount_deposited=amount_deposited+? WHERE voucher=?`, [row.amount, row.amount, row.voucher]);
 					device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
 				});
 			}
