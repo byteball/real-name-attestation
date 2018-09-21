@@ -718,7 +718,7 @@ eventBus.once('headless_and_rates_ready', () => {
 							);
 							if (row.from_distribution) {
 								db.query(`
-									UPDATE vouchers SET amount=amount+?	WHERE voucher=(SELECT voucher FROM vouchers WHERE receiving_address=?)`,
+									UPDATE vouchers SET amount=amount+?	WHERE receiving_address=?)`,
 									[row.amount, row.receiving_address]);
 								return;
 							}
