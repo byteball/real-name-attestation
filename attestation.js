@@ -281,7 +281,7 @@ function handleJumioData(transaction_id, body){
 											`SELECT payload FROM messages
 											JOIN attestations USING (unit, message_index)
 											WHERE address=? AND attestor_address=?
-											ORDER BY rowid DESC LIMIT 1`,
+											ORDER BY attestations.rowid DESC LIMIT 1`,
 											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
 											function(rows) {
 												if (!rows.length) {
