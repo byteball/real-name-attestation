@@ -465,7 +465,7 @@ function respond(from_address, text, response){
 					device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 				});
 			} else 
-				return device.sendMessageToDevice(from_address, 'text', texts.hasAttestationAlready());
+				return device.sendMessageToDevice(from_address, 'text', texts.alreadyHasAttestation());
 			return;
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
@@ -545,7 +545,7 @@ function respond(from_address, text, response){
 							);
 						});
 					} else 
-						return device.sendMessageToDevice(from_address, 'text', texts.hasAttestationAlready());
+						return device.sendMessageToDevice(from_address, 'text', texts.alreadyHasAttestation());
 				});
 			});
 			return;

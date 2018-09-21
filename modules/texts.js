@@ -85,8 +85,8 @@ exports.signMessage = (user_address, voucher_code) => {
 	return `I'm going to attest my address ${user_address}. Paying with smart voucher ${voucher_code}`;
 }
 
-exports.hasAttestationAlready = () => {
-	return `You have been attested already or attestation is in progress`;
+exports.alreadyHasAttestation = () => {
+	return `You have already been attested or attestation is in progress`;
 }
 
 exports.pleasePayOrPrivacy = (receiving_address, price, user_address, post_publicly, objDiscountedPriceInUSD, have_attestation) => {
