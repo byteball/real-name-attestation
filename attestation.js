@@ -646,7 +646,7 @@ eventBus.once('headless_and_rates_ready', () => {
 		let device = require('byteballcore/device.js');
 		console.log("new_my_transactions units:", arrUnits);
 		db.query(
-			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL
+			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL AS from_distribution
 			FROM outputs
 			CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)
