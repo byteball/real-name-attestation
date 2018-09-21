@@ -354,12 +354,12 @@ function respond(from_address, text, response){
 					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
 			})
 		}
-		function getAnyAttestation(device_address, user_address) {
+		function hasSuccessfulOrOngoingAttestation(device_address, user_address) {
 			return new Promise(resolve => {
 				db.query(
-					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
-					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id)
-					WHERE receiving_addresses.device_address=? OR receiving_addresses.user_address=? ORDER BY transaction_id DESC LIMIT 1`, [device_address, user_address], resolve);
+					`SELECT COUNT(1) > 0 AS has_attestation
+					FROM transactions JOIN receiving_addresses USING(receiving_address)
+					WHERE (receiving_addresses.device_address=? OR receiving_addresses.user_address=?) AND (scan_result=1 OR scan_result IS NULL)`, [device_address, user_address], resolve);
 			})
 		}
 		
@@ -451,8 +451,8 @@ function respond(from_address, text, response){
 		if (text.length == 13) { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			let rows = await getAnyAttestation(from_address, userInfo.user_address);
-			if (!rows.length || rows[0].scan_result === 0) { // not yet attested
+			let has_attestation_rows = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+			if (!has_attestation_rows[0].has_attestation) { // never been attested on this device or user_address
 				mutex.lock(['voucher-'+text], async (unlock) => {
 					let voucherInfo = await voucher.getInfo(text);
 					if (!voucherInfo) {
@@ -462,10 +462,8 @@ function respond(from_address, text, response){
 					unlock();
 					device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
 				});
-			} else if (rows[0].scan_result === 1)
-				return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
-			else 
-				return device.sendMessageToDevice(from_address, 'text', texts.underWay());
+			} else 
+				return device.sendMessageToDevice(from_address, 'text', texts.hasAttestationAlready());
 			return;
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
@@ -493,8 +491,8 @@ function respond(from_address, text, response){
 				if (objSignedMessage.signed_message != texts.signMessage(userInfo.user_address, voucher_code))
 					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
 				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-					let rows = await getAnyAttestation(from_address, userInfo.user_address);
-					if (!rows.length || rows[0].scan_result === 0) { // not yet attested
+					let has_attestation_rows = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+					if (!has_attestation_rows[0].has_attestation) { // never been attested on this device or user_address
 						text = voucher_code;
 						mutex.lock(['voucher-'+text], async (unlock) => {
 							let voucherInfo = await voucher.getInfo(text);
@@ -544,10 +542,8 @@ function respond(from_address, text, response){
 								}
 							);
 						});
-					} else if (rows[0].scan_result === 1)
-						return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
-					else 
-						return device.sendMessageToDevice(from_address, 'text', texts.underWay());
+					} else 
+						return device.sendMessageToDevice(from_address, 'text', texts.hasAttestationAlready());
 				});
 			});
 			return;
@@ -572,8 +568,8 @@ function respond(from_address, text, response){
 				if (post_publicly === null)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
 				if (text === 'again') {
-					let rows = await getAnyAttestation(from_address, userInfo.user_address);
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD, !!rows.length));
+					let rows = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD, rows[0].has_attestation));
 				}
 				let rows = await getAttestation(receiving_address);
 				if (rows.length === 0)
