@@ -61,7 +61,7 @@ exports.withdrawVoucher = (voucherInfo) => {
 exports.withdrawComplete = (bytes = 0, contract_bytes = 0, voucherInfo) => {
 	let gb = (bytes/1e9).toLocaleString([], {maximumFractionDigits: 9});
 	let contract_gb = (contract_bytes/1e9).toLocaleString([], {maximumFractionDigits: 9});
-	return `We sent you a total of ${gb+contract_gb} GB from your smart voucher ${voucherInfo.voucher}. ` + (gb ? `${gb} GB was sent to your address ${voucherInfo.user_address}` : ``) + (contract_gb ? `${(gb && contract_gb ? ` and`:'')} ${contract_gb} GB was sent to your contract.` : ``);
+	return `We sent you a total of ${+gb+(+contract_gb)} GB from your smart voucher ${voucherInfo.voucher}. ` + (gb ? `${gb} GB was sent to your address ${voucherInfo.user_address}` : ``) + (contract_gb ? `${(gb && contract_gb ? ` and`:'')} ${contract_gb} GB was sent to your contract.` : ``);
 };
 
 exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
