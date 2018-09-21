@@ -45,7 +45,7 @@ function sendAndWriteReward(reward_type, transaction_id){
 				contract_address
 			FROM ${table}
 			JOIN transactions USING(transaction_id)
-			LEFT JOIN vouchers USING(voucher)
+			LEFT JOIN vouchers ON transactions.voucher=vouchers.voucher AND '${table}' != 'reward_units'
 			JOIN receiving_addresses ON transactions.receiving_address = receiving_addresses.receiving_address
 			LEFT JOIN contracts ON ${table}.user_address=contracts.user_address
 			WHERE transaction_id=?`;

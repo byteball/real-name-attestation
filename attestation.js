@@ -301,7 +301,7 @@ function handleJumioData(transaction_id, body){
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
@@ -645,16 +645,17 @@ eventBus.once('headless_and_rates_ready', () => {
 	eventBus.on('new_my_transactions', arrUnits => {
 		let device = require('byteballcore/device.js');
 		db.query(
-			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts
+			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL
 			FROM outputs
 			CROSS JOIN receiving_addresses ON outputs.address=receiving_addresses.receiving_address
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)
 			UNION -- vouchers deposit / reward
-			SELECT outputs.amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts
+			SELECT outputs.amount, asset, device_address, receiving_address, user_address, unit, 0 AS price, CURRENT_TIMESTAMP AS price_ts,
+				(SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution
 			FROM outputs
 			CROSS JOIN vouchers ON outputs.address=vouchers.receiving_address
-			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
-			[arrUnits, arrUnits],
+			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN vouchers ON vouchers.receiving_address=unit_authors.address WHERE unit_authors.unit=outputs.unit)`,
+			[arrUnits, reward.distribution_address, arrUnits],
 			rows => {
 				rows.forEach(row => {
 			
@@ -709,12 +710,19 @@ eventBus.once('headless_and_rates_ready', () => {
 								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
 								[row.receiving_address, row.price, row.amount, row.unit]
 							);
-						else
+						else {
 							db.query(
 								`INSERT INTO voucher_transactions (voucher, amount, unit)
 								SELECT voucher, ?, ? FROM vouchers WHERE receiving_address=?`, 
 								[row.amount, row.unit, row.receiving_address]
 							);
+							if (row.from_distribution) {
+								db.query(`
+									UPDATE vouchers SET amount=amount+?	WHERE voucher=(SELECT voucher FROM vouchers WHERE receiving_address=?)`,
+									[row.amount, row.receiving_address]);
+								return;
+							}
+						}
 						device.sendMessageToDevice(row.device_address, 'text', "Received your payment of "+(row.amount/1e9)+" GB, waiting for confirmation.  It should take 5-10 minutes.");
 					});
 				});
@@ -738,25 +746,15 @@ eventBus.once('headless_and_rates_ready', () => {
 			}
 		);
 		db.query( // deposit vouchers
-			`SELECT voucher, vouchers.amount AS old_amount, device_address, outputs.amount, (SELECT 1 FROM inputs WHERE address=? AND unit=outputs.unit LIMIT 1) AS from_distribution, (SELECT 1 FROM unit_authors WHERE unit=outputs.unit AND address=vouchers.receiving_address) AS is_change
+			`SELECT voucher, vouchers.amount AS old_amount, device_address, outputs.amount
 			FROM vouchers
 			JOIN outputs ON outputs.address=vouchers.receiving_address
-			WHERE outputs.unit IN (?) AND outputs.asset IS NULL`,
-			[reward.distribution_address, arrUnits],
+			WHERE outputs.unit IN (?) AND outputs.asset IS NULL AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN my_addresses USING(address) WHERE unit_authors.unit=outputs.unit)`,
+			[arrUnits],
 			rows => {
 				rows.forEach(row => {
-					if (row.is_change)
-						return;
-					let deposited = "";
-					let params = [row.amount];
-					if (!row.from_distribution) {
-						deposited = ", amount_deposited=amount_deposited+?";
-						params.push(row.amount);
-					}
-					params.push(row.voucher);
-					db.query(`UPDATE vouchers SET amount=amount+? ${deposited} WHERE voucher=?`, params);
-					if (!row.from_distribution)
-						device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
+					db.query(`UPDATE vouchers SET amount=amount+?, amount_deposited=amount_deposited+? WHERE voucher=?`, [row.amount, row.voucher]);
+					device.sendMessageToDevice(row.device_address, 'text', texts.voucherDeposited(row.voucher, row.old_amount+row.amount));
 				});
 			}
 		);
