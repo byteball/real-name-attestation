@@ -297,12 +297,12 @@ function handleJumioData(transaction_id, body){
 												db.query(
 													`INSERT ${db.getIgnore()} INTO referral_reward_units
 													(transaction_id, user_address, user_id, new_user_address, new_user_id, reward)
-													VALUES (?, ?, ?, ?, ?, ?)`
+													VALUES (?, ?, ?, ?, ?, ?)`,
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
 														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of ${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB).  Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
-														reward.sendAndWriteReward('voucher', transaction_id);
+														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
 												);
@@ -352,6 +352,16 @@ function respond(from_address, text, response){
 					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
 					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id)
 					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
+			})
+		}
+		function hasSuccessfulOrOngoingAttestation(device_address, user_address) {
+			return new Promise(resolve => {
+				db.query(
+					`SELECT 1
+					FROM transactions JOIN receiving_addresses USING(receiving_address)
+					WHERE (receiving_addresses.device_address=? OR receiving_addresses.user_address=?) AND (scan_result=1 OR scan_result IS NULL) LIMIT 1`, [device_address, user_address], function(rows) {
+						resolve(rows.length > 0)
+					});
 			})
 		}
 		
@@ -443,23 +453,19 @@ function respond(from_address, text, response){
 		if (text.length == 13) { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-				let rows = await getAttestation(receiving_address);
-				if (!rows.length || rows[0].scan_result === 0) { // not yet attested
-					mutex.lock(['voucher-'+text], async (unlock) => {
-						let voucherInfo = await voucher.getInfo(text);
-						if (!voucherInfo) {
-							unlock();
-							return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
-						}
+			let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+			if (!has_attestation) { // never been attested on this device or user_address
+				mutex.lock(['voucher-'+text], async (unlock) => {
+					let voucherInfo = await voucher.getInfo(text);
+					if (!voucherInfo) {
 						unlock();
-						device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
-					});
-				} else if (rows[0].scan_result === 1)
-					return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
-				else 
-					return device.sendMessageToDevice(from_address, 'text', texts.underWay());
-			});
+						return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
+					}
+					unlock();
+					device.sendMessageToDevice(from_address, 'text', `Using smart voucher ${text}. Now we need to confirm that you are the owner of address ${userInfo.user_address}. Please sign the following message: [s](sign-message-request:${texts.signMessage(userInfo.user_address, text)})`);
+				});
+			} else 
+				return device.sendMessageToDevice(from_address, 'text', texts.alreadyHasAttestation());
 			return;
 		}
 		let arrSignedMessageMatches = text.match(/\(signed-message:(.+?)\)/);
@@ -487,8 +493,8 @@ function respond(from_address, text, response){
 				if (objSignedMessage.signed_message != texts.signMessage(userInfo.user_address, voucher_code))
 					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
 				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-					let rows = await getAttestation(receiving_address);
-					if (!rows.length || rows[0].scan_result === 0) { // not yet attested
+					let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+					if (!has_attestation) { // never been attested on this device or user_address
 						text = voucher_code;
 						mutex.lock(['voucher-'+text], async (unlock) => {
 							let voucherInfo = await voucher.getInfo(text);
@@ -496,7 +502,8 @@ function respond(from_address, text, response){
 								unlock();
 								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 							}
-							let price = conversion.getPriceInBytes(conf.priceInUSD);
+							let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address);
+							let price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSD);
 							if (voucherInfo.amount < price) {
 								unlock();
 								device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user tried to attest using your smart voucher ${text}, but it does not have enough funds. ` + texts.depositVoucher(text));
@@ -538,10 +545,8 @@ function respond(from_address, text, response){
 								}
 							);
 						});
-					} else if (rows[0].scan_result === 1)
-						return device.sendMessageToDevice(from_address, 'text', texts.alreadyAttested(rows[0].attestation_date));
-					else 
-						return device.sendMessageToDevice(from_address, 'text', texts.underWay());
+					} else 
+						return device.sendMessageToDevice(from_address, 'text', texts.alreadyHasAttestation());
 				});
 			});
 			return;
@@ -565,8 +570,10 @@ function respond(from_address, text, response){
 				}
 				if (post_publicly === null)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.privateOrPublic());
-				if (text === 'again')
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));
+				if (text === 'again') {
+					let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD, has_attestation));
+				}
 				let rows = await getAttestation(receiving_address);
 				if (rows.length === 0)
 					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrPrivacy(receiving_address, price, userInfo.user_address, post_publicly, objDiscountedPriceInUSD));

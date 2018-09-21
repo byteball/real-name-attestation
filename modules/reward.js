@@ -34,24 +34,22 @@ function sendReward(outputs, device_address, onDone){
 
 function sendAndWriteReward(reward_type, transaction_id){
 	const mutex = require('byteballcore/mutex.js');
-	let sql, table;
-	if (reward_type == "voucher") {
-		table = 'referral_reward_units';
-		sql = `SELECT device_address, reward_date, reward, vouchers.receiving_address AS user_address
+	mutex.lock(['tx-'+transaction_id], unlock => {
+		let table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
+		let	sql = `SELECT
+				COALESCE(vouchers.device_address, (SELECT device_address FROM receiving_addresses WHERE receiving_addresses.user_address=user_address LIMIT 1)) AS device_address,
+				reward_date,
+				reward,
+				COALESCE(vouchers.receiving_address, ${table}.user_address) AS user_address,
+				contract_reward,
+				contract_address
 			FROM ${table}
 			JOIN transactions USING(transaction_id)
-			JOIN vouchers USING(voucher)
-			WHERE transaction_id=?`;
-	} else {
-		table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
-		sql = `SELECT receiving_addresses.device_address, reward_date, reward, ${table}.user_address, contract_reward, contract_address
-			FROM ${table}
-			JOIN transactions USING(transaction_id)
-			JOIN receiving_addresses USING(receiving_address)
+			LEFT JOIN vouchers USING(voucher)
+			JOIN receiving_addresses ON transactions.receiving_address = receiving_addresses.receiving_address
 			LEFT JOIN contracts ON ${table}.user_address=contracts.user_address
 			WHERE transaction_id=?`;
-	}
-	mutex.lock(['tx-'+transaction_id], unlock => {
+
 		db.query(sql, [transaction_id], 
 			rows => {
 				if (rows.length === 0)
