@@ -644,6 +644,7 @@ eventBus.once('headless_and_rates_ready', () => {
 	
 	eventBus.on('new_my_transactions', arrUnits => {
 		let device = require('byteballcore/device.js');
+		console.log("new_my_transactions units:", arrUnits);
 		db.query(
 			`SELECT amount, asset, device_address, receiving_address, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL
 			FROM outputs
@@ -657,6 +658,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			WHERE unit IN(?) AND NOT EXISTS (SELECT 1 FROM unit_authors CROSS JOIN vouchers ON vouchers.receiving_address=unit_authors.address WHERE unit_authors.unit=outputs.unit)`,
 			[arrUnits, reward.distribution_address, arrUnits],
 			rows => {
+				console.log("new_my_transactions rows: ", rows);
 				rows.forEach(row => {
 			
 					async function checkPayment(onDone){
@@ -705,6 +707,7 @@ eventBus.once('headless_and_rates_ready', () => {
 								}
 							);
 						}
+
 						if (row.price > 0)
 							db.query(
 								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
