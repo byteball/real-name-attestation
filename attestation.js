@@ -354,6 +354,7 @@ function respond(from_address, text, response){
 					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
 			})
 		}
+		
 		function hasSuccessfulOrOngoingAttestation(device_address, user_address) {
 			return new Promise(resolve => {
 				db.query(
@@ -365,18 +366,27 @@ function respond(from_address, text, response){
 			})
 		}
 		
+		function hasSuccessfulAttestation(device_address, user_address) {
+			return new Promise(resolve => {
+				db.query(
+					`SELECT 1
+					FROM transactions JOIN receiving_addresses USING(receiving_address)
+					WHERE receiving_addresses.device_address=? AND receiving_addresses.user_address=? AND scan_result=1 LIMIT 1`, [device_address, user_address], function(rows) {
+						resolve(rows.length > 0)
+					});
+			})
+		}
+		
 		if (text === 'help')
 			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
 		if (text === 'new voucher') {
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, post_publicly) => {
-				let rows = await getAttestation(receiving_address);
-				if (!rows.length)
-					return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
-				let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
-				device.sendMessageToDevice(from_address, 'text', `New smart voucher: ${voucher_code}\n\n` + texts.depositVoucher(voucher_code) + '\n\n' + texts.vouchersHelp());
-			});
+			let bAttested = await hasSuccessfulAttestation(from_address, userInfo.user_address);
+			if (!bAttested)
+				return device.sendMessageToDevice(from_address, 'text', `Only attested users can issue vouchers`);
+			let [voucher_code] = await voucher.issueNew(userInfo.user_address, from_address);
+			device.sendMessageToDevice(from_address, 'text', `New smart voucher: ${voucher_code}\n\n` + texts.depositVoucher(voucher_code) + '\n\n' + texts.vouchersHelp());
 			return;
 		}
 		if (text === 'vouchers') {
