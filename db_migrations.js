@@ -59,7 +59,7 @@ module.exports = function() {
 						FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
 						FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE
 					)`);
-					connection.addQuery(arrQueries, `INSERT INTO transactions_new SELECT *, NULL FROM transactions`);
+					connection.addQuery(arrQueries, `INSERT INTO transactions_new SELECT *, NULL, NULL FROM transactions`);
 					connection.addQuery(arrQueries, `DROP TABLE transactions`);
 					connection.addQuery(arrQueries, `ALTER TABLE transactions_new RENAME TO transactions`);
 					connection.addQuery(arrQueries, `COMMIT`);
