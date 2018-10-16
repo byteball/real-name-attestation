@@ -330,6 +330,7 @@ async function getPriceInUSD(user_address){
 
 function respond(from_address, text, response){
 	let device = require('byteballcore/device.js');
+	let lc_text = text.toLowerCase();
 	readUserInfo(from_address, async (userInfo) => {
 		
 		function checkUserAddress(onDone){
@@ -377,9 +378,9 @@ function respond(from_address, text, response){
 			})
 		}
 		
-		if (text === 'help')
+		if (lc_text === 'help')
 			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
-		if (text === 'new voucher') {
+		if (lc_text === 'new voucher') {
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let bAttested = await hasSuccessfulAttestation(from_address, userInfo.user_address);
@@ -389,13 +390,13 @@ function respond(from_address, text, response){
 			device.sendMessageToDevice(from_address, 'text', `New smart voucher: ${voucher_code}\n\n` + texts.depositVoucher(voucher_code) + '\n\n' + texts.vouchersHelp());
 			return;
 		}
-		if (text === 'vouchers') {
+		if (lc_text === 'vouchers') {
 			let vouchers = await voucher.getAllUserVouchers(userInfo.user_address);
 			if (!vouchers.length)
 				return device.sendMessageToDevice(from_address, 'text', texts.noVouchers());
 			return device.sendMessageToDevice(from_address, 'text', texts.listVouchers(userInfo.user_address, vouchers));
 		}
-		if (text.startsWith('deposit')) {
+		if (lc_text.startsWith('deposit')) {
 			let tokens = text.split(" ");
 			if (tokens.length == 1)
 				return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher());
@@ -410,7 +411,7 @@ function respond(from_address, text, response){
 			}
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
 		}
-		if (text.startsWith('limit')) { // voucher
+		if (lc_text.startsWith('limit')) { // voucher
 			let tokens = text.split(" ");
 			if (tokens.length != 3)
 				return device.sendMessageToDevice(from_address, 'text', texts.limitVoucher());
@@ -426,7 +427,7 @@ function respond(from_address, text, response){
 			await voucher.setLimit(voucherInfo.voucher, limit);
 			return device.sendMessageToDevice(from_address, 'text', `new limit ${limit} for smart voucher ${voucher_code}`);
 		}
-		if (text.startsWith('withdraw')) {
+		if (lc_text.startsWith('withdraw')) {
 			let tokens = text.split(" ");
 			if (tokens.length < 2)
 				return device.sendMessageToDevice(from_address, 'text', `format: withdraw VOUCHER amount`);
