@@ -551,7 +551,7 @@ function respond(from_address, text, response){
 										connection.release();
 										unlock();
 										jumio.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
-										device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user has just used your smart voucher ${text} to pay for attestation, new voucher balance ${(voucherInfo.amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB`);
+										device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user has just used your smart voucher ${text} to pay for attestation, new voucher balance ${((voucherInfo.amount-price)/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB`);
 									});
 								}
 							);
