@@ -542,6 +542,8 @@ function respond(from_address, text, response){
 										await asyncQuery(`BEGIN TRANSACTION`);
 										let res = await asyncQuery(`INSERT INTO transactions (receiving_address, voucher, price, received_amount, signed_message) VALUES (?, ?, 0, 0, ?)`, [receiving_address, voucherInfo.voucher, signedMessageJson]);
 										let transaction_id = res.insertId;
+										if (!transaction_id)
+											throw Error("no insertId in voucher transaction");
 										await asyncQuery(`INSERT INTO voucher_transactions (voucher, transaction_id, amount) VALUES (?, last_insert_rowid(), ?)`,
 											[voucherInfo.voucher, -price]);
 										await asyncQuery(`UPDATE vouchers SET amount=amount-? WHERE voucher=?`, [price, voucherInfo.voucher]);
