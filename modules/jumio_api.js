@@ -59,11 +59,15 @@ function initScan(user_address, scanReference, onDone){
 		"User-Agent": "Byteball attestation/1.0"
 	};
 	let json = {
-		merchantIdScanReference: scanReference,
-		customerId: user_address
+	//	merchantIdScanReference: scanReference,
+	//	customerId: user_address
+		customerInternalReference: scanReference,
+		userReference: user_address,
+		tokenLifetimeInMinutes: 4320  // 3 days
 	};
 	request({
-		url: "https://lon.netverify.com/api/netverify/v2/initiateNetverifyRedirect", 
+	//	url: "https://lon.netverify.com/api/netverify/v2/initiateNetverifyRedirect", 
+		url: "https://lon.netverify.com/api/v4/initiate", 
 		headers: headers, 
 		method: 'POST', 
 		json: json,
@@ -78,7 +82,8 @@ function initScan(user_address, scanReference, onDone){
 			return onDone("init netverify failed: "+error);
 		}
 		console.log("response: ", body);
-		onDone(null, body.clientRedirectUrl, body.jumioIdScanReference, body.authorizationToken);
+	//	onDone(null, body.clientRedirectUrl, body.jumioIdScanReference, body.authorizationToken);
+		onDone(null, body.redirectUrl, body.transactionReference, body.authorizationToken);
 	});
 }
 
