@@ -32,7 +32,7 @@ function initAndWriteScan(transaction_id, device_address, user_address, onDone){
 							onDone();
 					}
 				);
-				device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nThe link is valid only for 30 minutes.\n\nAfter you are done making photos of your ID and your face, Jumio will take some time to process the images, usually minutes but occasionally hours.  We'll message you only when the final outcome is known.");
+				device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification within 30 minutes after clicking the link, have your document ready.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Jumio will take some time to process the images, usually minutes but occasionally hours.  We'll message you only when the final outcome is known.");
 			});
 		});
 	});
