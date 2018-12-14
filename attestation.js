@@ -443,13 +443,13 @@ function respond(from_address, text, response){
 					return device.sendMessageToDevice(from_address, 'text', `its not your smart voucher!`);
 				}
 				if (tokens.length == 3) {
-					let gb_price = tokens[2];
-					let price = gb_price * 1e9;
-					if (price > voucherInfo.amount) {
+					let gb_amount = tokens[2];
+					let amount = gb_amount * 1e9;
+					if (amount > voucherInfo.amount) {
 						unlock();
-						return device.sendMessageToDevice(from_address, 'text', `not enough funds on smart voucher ${voucher_code} for withdrawal (tried to claim ${price} bytes, but smart voucher only has ${voucherInfo.amount} bytes`);
+						return device.sendMessageToDevice(from_address, 'text', `not enough funds on smart voucher ${voucher_code} for withdrawal (tried to claim ${amount} bytes, but smart voucher only has ${voucherInfo.amount} bytes`);
 					}
-					let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, price);
+					let [err, bytes, contract_bytes] = await voucher.withdraw(voucherInfo, amount);
 					if (!err)
 						device.sendMessageToDevice(from_address, 'text', texts.withdrawComplete(bytes, contract_bytes, await voucher.getInfo(voucher_code)));
 					else
