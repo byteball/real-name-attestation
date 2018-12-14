@@ -444,7 +444,11 @@ function respond(from_address, text, response){
 				}
 				if (tokens.length == 3) {
 					let gb_amount = tokens[2];
-					let amount = gb_amount * 1e9;
+					let amount = Math.round(gb_amount * 1e9);
+					if (amount <= 0){
+						unlock();
+						return device.sendMessageToDevice(from_address, 'text', `Withdraw amount must be positive`);
+					}
 					if (amount > voucherInfo.amount) {
 						unlock();
 						return device.sendMessageToDevice(from_address, 'text', `not enough funds on smart voucher ${voucher_code} for withdrawal (tried to claim ${amount} bytes, but smart voucher only has ${voucherInfo.amount} bytes`);
