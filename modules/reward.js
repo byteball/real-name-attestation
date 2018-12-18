@@ -97,6 +97,9 @@ function retrySendingRewardsOfType(reward_type){
 }
 
 function retrySendingRewards(){
+	const network = require('byteballcore/network.js');
+	if (network.isCatchingUp())
+		return;
 	retrySendingRewardsOfType('attestation');
 	retrySendingRewardsOfType('referral');
 }
