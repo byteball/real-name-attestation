@@ -49,7 +49,7 @@ exports.apiSmartIdSecret = '';
 exports.apiSmartIdCallback = 'http://localhost:8080/done';
 
 exports.priceInUSD = 8;
-exports.priceInUSDforSmartID = 1;
+exports.priceInUSDforSmartID = 0.5;
 exports.rewardInUSD = 8;
 exports.contractRewardInUSD = 12;
 exports.referralRewardInUSD = 0;
