@@ -62,6 +62,9 @@ function updateBittrexRates(){
 function getPriceInBytes(priceInUSD){
 	if (!bRatesReady)
 		throw Error("rates not ready yet");
+	if (!priceInUSD) {
+		throw Error("price missing");
+	}
 	return Math.round(1e9 * priceInUSD / (GBYTE_BTC_rate * BTC_USD_rate));
 }
 

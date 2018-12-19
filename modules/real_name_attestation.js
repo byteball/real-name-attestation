@@ -4,8 +4,10 @@ const conf = require('byteballcore/conf');
 const objectHash = require('byteballcore/object_hash.js');
 const db = require('byteballcore/db');
 const notifications = require('./notifications');
+const smartidApi = require('./smartid_api.js');
 const jumioApi = require('./jumio_api.js');
 const countries = require("i18n-iso-countries");
+const moment = require('moment');
 
 var assocAttestorAddresses = {};
 
@@ -23,46 +25,46 @@ function getUserId(profile){
 		last_name: profile.last_name,
 		dob: profile.dob,
 		country: profile.country,
-	//	id_number: profile.id_number
 	};
 	return objectHash.getBase64Hash([shortProfile, conf.salt]);
 }
 
-function getAttestationPayloadAndSrcProfile(user_address, data, bPublic){
-	let cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+function getAttestationPayloadAndSrcProfile(user_address, data, service_provider){
+	let cb_data;
+	if (service_provider === 'smartid') {
+		cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
+	}
+	else {
+		cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+	}
 	let profile = {
 		first_name: cb_data.idFirstName,
 		last_name: cb_data.idLastName,
 		dob: cb_data.idDob,
-		country: convertCountry3to2(cb_data.idCountry),
+		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : cb_data.idCountry,
 		us_state: cb_data.idUsState,
+		personal_code: cb_data.personalCode,
 		id_number: cb_data.idNumber,
 		id_type: cb_data.idType,
-		id_subtype: cb_data.idSubtype
+		id_subtype: cb_data.idSubtype,
+		id_expiry: cb_data.idExpiry ? moment(cb_data.idExpiry).format('YYYY-MM-DD') : '',
+		id_issued_at: cb_data.idIssuedAt ? moment(cb_data.idIssuedAt).format('YYYY-MM-DD') : ''
 	};
 	console.log(profile);
 	Object.keys(profile).forEach(function(key){
 		if (!profile[key])
 			delete profile[key];
 	});
-	console.log(profile);
-	if (bPublic){
-		throw "public";
-		profile.user_id = getUserId(profile);
-		let attestation = {
-			address: user_address,
-			profile: profile
-		};
-		return [attestation, null];
+	if (!Object.keys(profile).length) {
+		console.error(cb_data);
 	}
-	else{
-		var [public_profile, src_profile] = hideProfile(profile);
-		let attestation = {
-			address: user_address,
-			profile: public_profile
-		};
-		return [attestation, src_profile];
-	}
+
+	var [public_profile, src_profile] = hideProfile(profile);
+	let attestation = {
+		address: user_address,
+		profile: public_profile
+	};
+	return [attestation, src_profile];
 }
 
 function getNonUSAttestationPayload(user_address){
@@ -159,8 +161,9 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 						() => {
 						//	db.query("UPDATE transactions SET extracted_data='' WHERE transaction_id=?", [transaction_id]);
 							let device = require('byteballcore/device.js');
+							let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.byteball.org/#' : 'https://explorer.byteball.org/#');
 							let text = (attestation_type === 'real name') ? "Now your real name is attested" : "Now you are attested as non-US citizen";
-							text += ", see the attestation unit: https://explorer.byteball.org/#"+unit;
+							text += `, see the attestation unit: ${explorer}${unit}`;
 							if (src_profile){
 								let private_profile = {
 									unit: unit,
@@ -184,15 +187,14 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 
 function retryPostingAttestations(){
 	db.query(
-		"SELECT transaction_id, extracted_data, post_publicly, user_address, attestation_type \n\
+		"SELECT transaction_id, extracted_data, service_provider, user_address, attestation_type \n\
 		FROM attestation_units JOIN transactions USING(transaction_id) JOIN receiving_addresses USING(receiving_address) \n\
 		WHERE attestation_unit IS NULL", 
 		rows => {
 			rows.forEach(row => {
 				let attestation, src_profile;
-				row.post_publicly = 0; // override user choice
 				if (row.attestation_type === 'real name')
-					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.post_publicly);
+					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.service_provider);
 				else
 					attestation = getNonUSAttestationPayload(row.user_address);
 				postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.attestation_type], attestation, src_profile);

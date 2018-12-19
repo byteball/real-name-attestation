@@ -1,8 +1,36 @@
 /*jslint node: true */
 'use strict';
 const jumioApi = require('./jumio_api.js');
+const smartidApi = require('./smartid_api.js');
 const db = require('byteballcore/db');
+const objectHash = require('byteballcore/object_hash.js');
 
+function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
+	const mutex = require('byteballcore/mutex.js');
+	const device = require('byteballcore/device.js');
+	mutex.lock(['tx-'+transaction_id], function(unlock){
+		db.query("SELECT jumioIdScanReference FROM transactions WHERE transaction_id=?", [transaction_id], rows => {
+			if (rows[0].jumioIdScanReference){
+				unlock();
+				if (onDone)
+					onDone();
+				return;
+			}
+			let scanReference = transaction_id+'_'+user_address;
+			let jumioIdScanReference = objectHash.getBase64Hash([transaction_id, user_address]);
+			db.query(
+				"UPDATE transactions SET scanReference=?, jumioIdScanReference=? WHERE transaction_id=?", 
+				[scanReference, jumioIdScanReference, transaction_id],
+				() => {
+					unlock();
+					if (onDone)
+						onDone();
+				}
+			);
+			device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(jumioIdScanReference));
+		});
+	});
+}
 
 function initAndWriteScan(transaction_id, device_address, user_address, onDone){
 	const mutex = require('byteballcore/mutex.js');
@@ -40,12 +68,17 @@ function initAndWriteScan(transaction_id, device_address, user_address, onDone){
 
 function retryInitScans(){
 	db.query(
-		"SELECT transaction_id, device_address, user_address \n\
+		"SELECT transaction_id, device_address, user_address, service_provider \n\
 		FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
 		WHERE jumioIdScanReference IS NULL AND confirmation_date IS NOT NULL",
 		rows => {
 			rows.forEach(row => {
-				initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+				if (row.service_provider === 'smartid') {
+					initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
+				}
+				else {
+					initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+				}
 			});
 		}
 	);
@@ -56,7 +89,7 @@ function pollJumioScanData(handleData){
 	db.query(
 		"SELECT jumioIdScanReference, transaction_id \n\
 		FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
-		WHERE scan_result IS NULL AND jumioIdScanReference IS NOT NULL", 
+		WHERE service_provider = 'jumio' AND scan_result IS NULL AND jumioIdScanReference IS NOT NULL", 
 		rows => {
 			rows.forEach(row => {
 				jumioApi.retrieveScanData(row.jumioIdScanReference, body => {
@@ -75,6 +108,7 @@ function pollJumioScanData(handleData){
 	);
 }
 
+exports.initSmartIdLogin = initSmartIdLogin;
 exports.initAndWriteScan = initAndWriteScan;
 exports.retryInitScans = retryInitScans;
 exports.pollJumioScanData = pollJumioScanData;
