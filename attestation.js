@@ -816,7 +816,7 @@ eventBus.once('headless_wallet_ready', () => {
 					setInterval(reward.retrySendingRewards, 120*1000);
 					setInterval(pollAndHandleJumioScanData, 300*1000);
 					setInterval(moveFundsToAttestorAddresses, 60*1000);
-					setInterval(reward.sendDonations, 24*3600*1000);
+					setInterval(reward.sendDonations, 7*24*3600*1000);
 					
 					const consolidation = require('headless-byteball/consolidation.js');
 					consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['real name'], headlessWallet.signer, 100, 3600*1000);
