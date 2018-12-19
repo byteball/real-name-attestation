@@ -35,9 +35,9 @@ exports.MIN_AVAILABLE_WITNESSINGS = 100;
 
 exports.priceInUSD = 8;
 exports.rewardInUSD = 8;
-exports.contractRewardInUSD = 12;
+exports.contractRewardInUSD = 8;
 exports.referralRewardInUSD = 0;
-exports.contractReferralRewardInUSD = 20;
+exports.contractReferralRewardInUSD = 10;
 
 exports.contractTerm = 1; // years
 exports.contractUnclaimedTerm = 2; // years
