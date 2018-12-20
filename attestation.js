@@ -232,7 +232,7 @@ function handleJumioData(transaction_id, body){
 }
 
 function handleSmartIdData(transaction_id, body){
-	let data = smartidApi.convertRestResponseToCallbackFormat(body);
+	let data = data.status ? smartidApi.convertRestResponseToCallbackFormat(body) : body;
 	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
 	let error = body.error_description ? body.error_description : '';
 	if (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry) {
