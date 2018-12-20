@@ -176,9 +176,9 @@ function handleJumioData(transaction_id, body){
 		console.error("no identityVerification in tx "+transaction_id);
 		return;
 	}
-	if (scan_result && !data.identityVerification.validity){ // selfie check and selfie match
+	if (scan_result && (!data.identityVerification.validity || data.identityVerification.similarity !== 'MATCH')){ // selfie check and selfie match
 		scan_result = 0;
-		error = data.identityVerification.reason;
+		error = data.identityVerification.reason || data.identityVerification.similarity;
 	}
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		db.query(
