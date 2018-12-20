@@ -79,6 +79,14 @@ exports.goingToAttest = (user_address) => {
 	return `Thanks, going to attest your address ${user_address}. Your personal data will be kept private and stored in your wallet.`;
 }
 
+exports.welcomeProviders = () => {
+	let jumioPrice = conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2});
+	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2});
+	return `Jumio Netverify is available worldwide. It uses your webcam to take photos of your Passport, ID, Driver License, other Docs and it costs $${jumioPrice} per attempt.
+
+Smart ID Estonia is available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia. You can use ID-card, Mobile-ID, Smart-ID and it costs $${smartidPrice} per attempt.`;
+}
+
 exports.providerJumio = () => {
 	return "After payment, you will be redirected to Jumio website for your document (ID, driver's licence, passport) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
@@ -94,9 +102,9 @@ exports.selectedOption = () => {
 exports.selectProvider = (service_provider) => {
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
 	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
-	return `Please select a attestation method?
+	return `Please select a attestation service provider?
 	* [Jumio Netverify](command:jumio) ${jumioSelected}
-	* [ID-card / Mobile-ID / Smart-ID](command:smartid) ${smartidSelected}`;
+	* [Smart ID Estonia](command:smartid) ${smartidSelected}`;
 };
 
 exports.orPay = () => {
@@ -104,7 +112,7 @@ exports.orPay = () => {
 };
 
 exports.pleasePayOrProvider = (receiving_address, price, user_address, service_provider, objDiscountedPriceInUSD, have_attestation) => {
-	return (service_provider === null) ? exports.selectProvider() : exports.selectProvider(service_provider) + "\n" + exports.orPay() + "\n\n" + exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation);
+	return (service_provider === null) ? exports.welcomeProviders() +"\n\n"+ exports.selectProvider() : exports.selectProvider(service_provider) + "\n" + exports.orPay() + "\n\n" + exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation);
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
