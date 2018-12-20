@@ -621,7 +621,7 @@ function respond(from_address, text, response){
 											serviceHelper.initSmartIdLogin(transaction_id, from_address, userInfo.user_address);
 										}
 										else {
-											serviceHelper.initAndWriteScan(transaction_id, from_address, userInfo.user_address);
+											serviceHelper.initAndWriteJumioScan(transaction_id, from_address, userInfo.user_address);
 										}
 										device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user has just used your smart voucher ${text} to pay for attestation, new voucher balance ${((voucherInfo.amount-price)/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB`);
 									});
@@ -837,7 +837,7 @@ eventBus.once('headless_and_rates_ready', () => {
 						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}
 					else {
-						serviceHelper.initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+						serviceHelper.initAndWriteJumioScan(row.transaction_id, row.device_address, row.user_address);
 					}
 				});
 			}

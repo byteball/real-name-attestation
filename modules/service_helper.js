@@ -32,7 +32,7 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 	});
 }
 
-function initAndWriteScan(transaction_id, device_address, user_address, onDone){
+function initAndWriteJumioScan(transaction_id, device_address, user_address, onDone){
 	const mutex = require('byteballcore/mutex.js');
 	const device = require('byteballcore/device.js');
 	mutex.lock(['tx-'+transaction_id], function(unlock){
@@ -77,7 +77,7 @@ function retryInitScans(){
 					initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 				}
 				else {
-					initAndWriteScan(row.transaction_id, row.device_address, row.user_address);
+					initAndWriteJumioScan(row.transaction_id, row.device_address, row.user_address);
 				}
 			});
 		}
@@ -109,7 +109,7 @@ function pollJumioScanData(handleData){
 }
 
 exports.initSmartIdLogin = initSmartIdLogin;
-exports.initAndWriteScan = initAndWriteScan;
+exports.initAndWriteJumioScan = initAndWriteJumioScan;
 exports.retryInitScans = retryInitScans;
 exports.pollJumioScanData = pollJumioScanData;
 

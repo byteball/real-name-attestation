@@ -4,11 +4,11 @@ const request = require('request');
 const conf = require('byteballcore/conf.js');
 const notifications = require('./notifications.js');
 
-function getLoginUrl(jumioIdScanReference) {
+function getLoginUrl(stateReference) {
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback) {
 		throw Error("smartid credentials missing");
 	}
-	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(jumioIdScanReference);
+	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(stateReference);
 }
 
 function getAccessToken(grantCode, onDone){
