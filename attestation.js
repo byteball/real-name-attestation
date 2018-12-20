@@ -235,7 +235,7 @@ function handleSmartIdData(transaction_id, body){
 	let data = smartidApi.convertRestResponseToCallbackFormat(body);
 	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
 	let error = body.error_description ? body.error_description : '';
-	if (!data.idCountry || !data.idDob) {
+	if (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry) {
 		scan_result = 0;
 		error = 'some required data missing';
 	}
