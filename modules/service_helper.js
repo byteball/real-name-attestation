@@ -3,6 +3,7 @@
 const jumioApi = require('./jumio_api.js');
 const smartidApi = require('./smartid_api.js');
 const db = require('byteballcore/db');
+const conf = require('byteballcore/conf.js');
 const objectHash = require('byteballcore/object_hash.js');
 
 function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
@@ -17,17 +18,17 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 				return;
 			}
 			let scanReference = transaction_id+'_'+user_address;
-			let jumioIdScanReference = objectHash.getBase64Hash([transaction_id, user_address]);
+			let stateReference = objectHash.getBase64Hash([transaction_id, user_address, conf.salt]);
 			db.query(
 				"UPDATE transactions SET scanReference=?, jumioIdScanReference=? WHERE transaction_id=?", 
-				[scanReference, jumioIdScanReference, transaction_id],
+				[scanReference, stateReference, transaction_id],
 				() => {
 					unlock();
 					if (onDone)
 						onDone();
 				}
 			);
-			device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(jumioIdScanReference));
+			device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(stateReference));
 		});
 	});
 }
