@@ -13,7 +13,7 @@ function getLoginUrl(stateReference) {
 
 function getAccessToken(grantCode, onDone){
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback) {
-		onDone("smartid credentials missing");
+		throw Error("smartid credentials missing");
 	}
 	let headers = {
 		"Content-Type": "application/json",
@@ -36,7 +36,7 @@ function getAccessToken(grantCode, onDone){
 			body = JSON.parse(body);
 		if (error || response.statusCode !== 200){
 			notifications.notifyAdmin("getAccessToken smartid failed", error+", status="+(response ? response.statusCode : '?'));
-			onDone("getAccessToken smartid failed: "+error, body);
+			return onDone("getAccessToken smartid failed: "+error, body);
 		}
 		console.log("response: ", body);
 		onDone(null, body);
@@ -45,7 +45,7 @@ function getAccessToken(grantCode, onDone){
 
 function getUserData(access_token, onDone){
 	if (!access_token) {
-		onDone("access_token missing");
+		return onDone("access_token missing");
 	}
 	let headers = {
 		"Content-Type": "application/json",
@@ -60,7 +60,7 @@ function getUserData(access_token, onDone){
 			body = JSON.parse(body);
 		if (error || response.statusCode !== 200){
 			notifications.notifyAdmin("getUserData smartid failed", error+", status="+(response ? response.statusCode : '?'));
-			onDone("getUserData smartid failed: "+error, body);
+			return onDone("getUserData smartid failed: "+error, body);
 		}
 		console.log("response: ", body);
 		onDone(null, body);
