@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS users (
 	device_address CHAR(33) NOT NULL PRIMARY KEY,
 	user_address CHAR(32) NULL,
+	service_provider CHAR(20) NULL,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
 );
@@ -14,7 +15,7 @@ CREATE TABLE IF NOT EXISTS receiving_addresses (
 	price INT NULL,
 	last_price_date TIMESTAMP NULL,
 	service_provider CHAR(20) NULL,
-	UNIQUE (device_address, user_address),
+	UNIQUE (device_address, user_address, service_provider),
 	-- FOREIGN KEY (device_address, user_address) REFERENCES users(device_address, user_address),
 	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address),
 	FOREIGN KEY (receiving_address) REFERENCES my_addresses(address)
@@ -153,8 +154,3 @@ CREATE TABLE IF NOT EXISTS voucher_transactions (
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
 	FOREIGN KEY (unit) REFERENCES units(unit) ON DELETE CASCADE
 );
--- query separator
-/*
-ALTER TABLE receiving_addresses ADD service_provider CHAR(20) NULL;
-*/
-CREATE INDEX IF NOT EXISTS byServiceProvider ON receiving_addresses(service_provider);

@@ -100,6 +100,7 @@ function hideProfile(profile){
 function postAttestation(attestor_address, payload, onDone){
 	function onError(err){
 		notifications.notifyAdmin("attestation failed", err);
+		console.error(err);
 		onDone(err);
 	}
 	var network = require('byteballcore/network.js');
@@ -126,7 +127,7 @@ function postAttestation(attestor_address, payload, onDone){
 			}
 		})
 	};
-	if (conf.bPostTimestamp && attestor_address === assocAttestorAddresses['real name']){
+	if (conf.bPostTimestamp && attestor_address === assocAttestorAddresses['jumio']){
 		let timestamp = Date.now();
 		let datafeed = {timestamp: timestamp};
 		let objTimestampMessage = {
@@ -193,11 +194,14 @@ function retryPostingAttestations(){
 		rows => {
 			rows.forEach(row => {
 				let attestation, src_profile;
-				if (row.attestation_type === 'real name')
+				if (row.attestation_type === 'real name') {
 					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.service_provider);
-				else
+					postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.service_provider === 'smartid' ? 'smartid' : 'jumio'], attestation, src_profile);
+				}
+				else {
 					attestation = getNonUSAttestationPayload(row.user_address);
-				postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.attestation_type], attestation, src_profile);
+					postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.attestation_type], attestation, src_profile);
+				}
 			});
 		}
 	);

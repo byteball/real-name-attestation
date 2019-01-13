@@ -35,6 +35,7 @@ exports.admin_email = '';
 exports.from_email = '';
 
 // witnessing
+exports.bPostTimestamp = false;
 exports.bRunWitness = false;
 exports.THRESHOLD_DISTANCE = 20;
 exports.MIN_AVAILABLE_WITNESSINGS = 100;

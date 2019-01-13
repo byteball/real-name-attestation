@@ -6,6 +6,7 @@ const db = require('byteballcore/db');
 const eventBus = require('byteballcore/event_bus.js');
 const texts = require('./modules/texts.js');
 const db_migrations = require('./db_migrations.js');
+const db_migrations2 = require('./db_migrations2.js');
 const validationUtils = require('byteballcore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
@@ -31,41 +32,42 @@ let countryLookup = maxmind.openSync('../GeoLite2-Country.mmdb');
 let assocAskedForDonation = {};
 
 function readUserInfo(device_address, cb) {
-	db.query("SELECT user_address FROM users WHERE device_address = ?", [device_address], rows => {
+	db.query("SELECT device_address, user_address, service_provider FROM users WHERE device_address = ?", [device_address], rows => {
 		if (rows.length)
 			cb(rows[0]);
 		else {
 			db.query("INSERT "+db.getIgnore()+" INTO users (device_address) VALUES(?)", [device_address], () => {
 				cb({
 					device_address: device_address,
-					user_address: null
+					user_address: null,
+					service_provider: null
 				});
 			});
 		}
 	});
 }
 
-function readOrAssignReceivingAddress(device_address, user_address, cb){
+function readOrAssignReceivingAddress(device_address, user_address, service_provider, cb){
 	mutex.lock([device_address], unlock => {
 		db.query(
-			"SELECT receiving_address, service_provider, "+db.getUnixTimestamp('last_price_date')+" AS price_ts \n\
-			FROM receiving_addresses WHERE device_address=? AND user_address=?", 
-			[device_address, user_address], 
+			"SELECT receiving_address, "+db.getUnixTimestamp('last_price_date')+" AS price_ts \n\
+			FROM receiving_addresses WHERE device_address=? AND user_address=? AND service_provider=?", 
+			[device_address, user_address, service_provider], 
 			rows => {
 				if (rows.length > 0){
 					let row = rows[0];
 				//	if (row.price_ts < Date.now()/1000 - 3600)
 				//		row.service_provider = null;
-					cb(row.receiving_address, row.service_provider);
+					cb(row.receiving_address);
 					return unlock();
 				}
 				const headlessWallet = require('headless-byteball');
 				headlessWallet.issueNextMainAddress(receiving_address => {
 					db.query(
-						"INSERT INTO receiving_addresses (device_address, user_address, receiving_address, post_publicly) VALUES(?,?,?,0)",
-						[device_address, user_address, receiving_address],
+						"INSERT INTO receiving_addresses (device_address, user_address, service_provider, receiving_address, post_publicly) VALUES(?,?,?,?,0)",
+						[device_address, user_address, service_provider, receiving_address],
 						() => {
-							cb(receiving_address, null);
+							cb(receiving_address);
 							unlock();
 						}
 					);
@@ -98,9 +100,10 @@ function moveFundsToAttestorAddresses(){
 				return;
 			let arrAddresses = rows.map(row => row.receiving_address);
 			let headlessWallet = require('headless-byteball');
+			let timestampMod = Date.now()%3;
 			headlessWallet.sendMultiPayment({
 				asset: null,
-				to_address: realNameAttestation.assocAttestorAddresses[Date.now()%2 ? 'real name' : 'nonus'],
+				to_address: realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'smartid' : 'nonus')],
 				send_all: true,
 				paying_addresses: arrAddresses
 			}, (err, unit) => {
@@ -268,7 +271,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 				}
 				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], async () => {
 					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.service_provider);
-					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses['real name'], attestation, src_profile);
+					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses[row.service_provider === 'smartid' ? 'smartid' : 'jumio'], attestation, src_profile);
 
 					setTimeout(() => {
 						if (bNonUS){
@@ -344,9 +347,9 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 										db.query(
 											`SELECT payload FROM messages
 											JOIN attestations USING (unit, message_index)
-											WHERE address=? AND attestor_address=?
+											WHERE address=? AND attestor_address IN (?)
 											ORDER BY attestations.rowid DESC LIMIT 1`,
-											[voucherInfo.user_address, realNameAttestation.assocAttestorAddresses['real name']],
+											[voucherInfo.user_address, [realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['smartid']]],
 											function(rows) {
 												if (!rows.length) {
 													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
@@ -416,12 +419,12 @@ function respond(from_address, text, response){
 			onDone(texts.insertMyAddress());
 		}
 
-		function getAttestation(receiving_address) {
+		function getAttestation(device_address, user_address) {
 			return new Promise(resolve => {
 				db.query(
 					`SELECT scan_result, attestation_date, transaction_id, extracted_data, user_address
-					FROM transactions JOIN receiving_addresses USING(receiving_address) LEFT JOIN attestation_units USING(transaction_id)
-					WHERE receiving_address=? ORDER BY transaction_id DESC LIMIT 1`, [receiving_address], resolve);
+					FROM transactions JOIN receiving_addresses USING(receiving_address) JOIN attestation_units USING(transaction_id)
+					WHERE (receiving_addresses.device_address=? OR receiving_addresses.user_address=?) ORDER BY transaction_id DESC LIMIT 1`, [device_address, user_address], resolve);
 			})
 		}
 		
@@ -576,7 +579,7 @@ function respond(from_address, text, response){
 				let voucher_code = voucher_code_matches[1];
 				if (objSignedMessage.signed_message != texts.signMessage(userInfo.user_address, voucher_code))
 					return device.sendMessageToDevice(from_address, 'text', `wrong message text signed`);
-				readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, service_provider) => {
+				readOrAssignReceivingAddress(from_address, userInfo.user_address, userInfo.service_provider, async (receiving_address) => {
 					let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
 					if (!has_attestation) { // never been attested on this device or user_address
 						text = voucher_code;
@@ -586,7 +589,7 @@ function respond(from_address, text, response){
 								unlock();
 								return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${text}`);
 							}
-							let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address, service_provider);
+							let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address, userInfo.service_provider);
 							let price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSDnoRound);
 							if (voucherInfo.amount < price) {
 								unlock();
@@ -617,7 +620,8 @@ function respond(from_address, text, response){
 										await connection.query(`COMMIT`);
 										connection.release();
 										unlock();
-										if (service_provider === 'smartid') {
+
+										if (userInfo.service_provider === 'smartid') {
 											serviceHelper.initSmartIdLogin(transaction_id, from_address, userInfo.user_address);
 										}
 										else {
@@ -638,29 +642,32 @@ function respond(from_address, text, response){
 		checkUserAddress(user_address_response => {
 			if (user_address_response)
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
-			readOrAssignReceivingAddress(from_address, userInfo.user_address, async (receiving_address, service_provider) => {
-				if (text === 'jumio' || text === 'smartid'){
-					service_provider = text
-					db.query("UPDATE receiving_addresses SET service_provider=? WHERE device_address=? AND user_address=?", 
-						[service_provider, from_address, userInfo.user_address]);
-					
-					if (text === "smartid")
-						response += texts.providerSmartID() + "\n\n";
-					else
-						response += texts.providerJumio() + "\n\n";
-				}
-				if (!service_provider)
-					return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders() + "\n\n" + texts.selectProvider());
-				let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address, service_provider);
+			
+			if (text === 'jumio' || text === 'smartid'){
+				userInfo.service_provider = text;
+				db.query("UPDATE users SET service_provider=? WHERE device_address=? AND user_address=?;", 
+					[userInfo.service_provider, from_address, userInfo.user_address]);
+				
+				if (userInfo.service_provider === "smartid")
+					response += texts.providerSmartID() + "\n\n";
+				else
+					response += texts.providerJumio() + "\n\n";
+			}
+			if (!userInfo.service_provider)
+				return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders() + "\n\n" + texts.selectProvider());
+			
+			readOrAssignReceivingAddress(from_address, userInfo.user_address, userInfo.service_provider, async (receiving_address) => {
+				let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address, userInfo.service_provider);
 				let price = conversion.getPriceInBytes(objDiscountedPriceInUSD.priceInUSDnoRound);
 				updatePrice(receiving_address, price);
+
 				if (text === 'again') {
 					let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrProvider(receiving_address, price, userInfo.user_address, service_provider, objDiscountedPriceInUSD, has_attestation));
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrProvider(receiving_address, price, userInfo.user_address, userInfo.service_provider, objDiscountedPriceInUSD, has_attestation));
 				}
-				let rows = await getAttestation(receiving_address);
+				let rows = await getAttestation(from_address, userInfo.user_address);
 				if (rows.length === 0)
-					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrProvider(receiving_address, price, userInfo.user_address, service_provider, objDiscountedPriceInUSD));
+					return device.sendMessageToDevice(from_address, 'text', response + texts.pleasePayOrProvider(receiving_address, price, userInfo.user_address, userInfo.service_provider, objDiscountedPriceInUSD));
 				let row = rows[0];
 				let scan_result = row.scan_result;
 				if (scan_result === null)
@@ -680,7 +687,7 @@ function respond(from_address, text, response){
 							}
 							let data = JSON.parse(row.extracted_data);
 							let cb_data;
-							if (service_provider === 'smartid') {
+							if (userInfo.service_provider === 'smartid') {
 								cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
 							}
 							else {
@@ -702,11 +709,11 @@ function respond(from_address, text, response){
 					);
 				}
 				else if (text === 'donate yes'){
-					db.query("UPDATE reward_units SET donated=1 WHERE transaction_id=?", [row.transaction_id]);
+					db.query("UPDATE reward_units SET donated=1 WHERE (device_address=? OR user_address=?)", [from_address, row.user_address]);
 					device.sendMessageToDevice(from_address, 'text', "Thanks for your donation!");
 				}
 				else if (text === 'donate no'){
-					db.query("UPDATE reward_units SET donated=0 WHERE transaction_id=? AND donated IS NULL", [row.transaction_id]);
+					db.query("UPDATE reward_units SET donated=0 WHERE (device_address=? OR user_address=?) AND donated IS NULL", [from_address, row.user_address]);
 					device.sendMessageToDevice(from_address, 'text', "Thanks for your choice.");
 				}
 				else
@@ -880,30 +887,36 @@ eventBus.once('headless_wallet_ready', () => {
 			throw new Error(error);
 
 		await db_migrations();
+		await db_migrations2();
 		
 		let headlessWallet = require('headless-byteball');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
-			console.log('== real name attestation address: '+address1);
-			realNameAttestation.assocAttestorAddresses['real name'] = address1;
+			console.log('== jumio attestation address: '+address1);
+			realNameAttestation.assocAttestorAddresses['jumio'] = address1;
 			headlessWallet.issueOrSelectAddressByIndex(0, 1, address2 => {
 				console.log('== non-US attestation address: '+address2);
 				realNameAttestation.assocAttestorAddresses['nonus'] = address2;
 				headlessWallet.issueOrSelectAddressByIndex(0, 2, address3 => {
 					console.log('== distribution address: '+address3);
 					reward.distribution_address = address3;
-					
-					server.listen(conf.webPort);
-					
-					setInterval(serviceHelper.retryInitScans, 60*1000);
-					setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
-					setInterval(reward.retrySendingRewards, 120*1000);
-					setInterval(pollAndHandleJumioScanData, 300*1000);
-					setInterval(moveFundsToAttestorAddresses, 60*1000);
-					setInterval(reward.sendDonations, 24*3600*1000);
-					
-					const consolidation = require('headless-byteball/consolidation.js');
-					consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['real name'], headlessWallet.signer, 100, 3600*1000);
-					consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);
+					headlessWallet.issueOrSelectAddressByIndex(0, 3, address4 => {
+						console.log('== smartid attestation address: '+address4);
+						realNameAttestation.assocAttestorAddresses['smartid'] = address4;
+
+						server.listen(conf.webPort);
+						
+						setInterval(serviceHelper.retryInitScans, 60*1000);
+						setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
+						setInterval(reward.retrySendingRewards, 120*1000);
+						setInterval(pollAndHandleJumioScanData, 300*1000);
+						setInterval(moveFundsToAttestorAddresses, 60*1000);
+						setInterval(reward.sendDonations, 24*3600*1000);
+						
+						const consolidation = require('headless-byteball/consolidation.js');
+						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
+						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['smartid'], headlessWallet.signer, 100, 3600*1000);
+						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);
+					});
 				});
 			});
 		});
