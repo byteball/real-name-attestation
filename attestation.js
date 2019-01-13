@@ -227,9 +227,9 @@ function handleJumioData(transaction_id, body){
 		console.error("no identityVerification in tx "+transaction_id);
 		return;
 	}
-	if (scan_result && !data.identityVerification.validity){ // selfie check and selfie match
+	if (scan_result && (!data.identityVerification.validity || data.identityVerification.similarity !== 'MATCH')){ // selfie check and selfie match
 		scan_result = 0;
-		error = data.identityVerification.reason;
+		error = data.identityVerification.reason || data.identityVerification.similarity;
 	}
 	handleAttestation(transaction_id, body, data, scan_result, error);
 }
@@ -910,7 +910,7 @@ eventBus.once('headless_wallet_ready', () => {
 						setInterval(reward.retrySendingRewards, 120*1000);
 						setInterval(pollAndHandleJumioScanData, 300*1000);
 						setInterval(moveFundsToAttestorAddresses, 60*1000);
-						setInterval(reward.sendDonations, 24*3600*1000);
+						setInterval(reward.sendDonations, 7*24*3600*1000);
 						
 						const consolidation = require('headless-byteball/consolidation.js');
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
