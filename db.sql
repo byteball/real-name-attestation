@@ -1,11 +1,12 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
 	device_address CHAR(33) NOT NULL PRIMARY KEY,
 	user_address CHAR(32) NULL,
+	service_provider CHAR(20) NULL,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
 );
-
-CREATE TABLE receiving_addresses (
+-- query separator
+CREATE TABLE IF NOT EXISTS receiving_addresses (
 	receiving_address CHAR(32) NOT NULL PRIMARY KEY,
 	device_address CHAR(33) NOT NULL,
 	user_address CHAR(32) NOT NULL,
@@ -13,15 +14,18 @@ CREATE TABLE receiving_addresses (
 	post_publicly TINYINT NULL,
 	price INT NULL,
 	last_price_date TIMESTAMP NULL,
-	UNIQUE (device_address, user_address),
---	FOREIGN KEY (device_address, user_address) REFERENCES users(device_address, user_address),
+	service_provider CHAR(20) NULL,
+	UNIQUE (device_address, user_address, service_provider),
+	-- FOREIGN KEY (device_address, user_address) REFERENCES users(device_address, user_address),
 	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address),
 	FOREIGN KEY (receiving_address) REFERENCES my_addresses(address)
 );
-CREATE INDEX byReceivingAddress ON receiving_addresses(receiving_address);
-CREATE INDEX byUserAddress ON receiving_addresses(user_address);
-
-CREATE TABLE vouchers (
+-- query separator
+CREATE INDEX IF NOT EXISTS byReceivingAddress ON receiving_addresses(receiving_address);
+-- query separator
+CREATE INDEX IF NOT EXISTS byUserAddress ON receiving_addresses(user_address);
+-- query separator
+CREATE TABLE IF NOT EXISTS vouchers (
 	voucher CHAR(13) NOT NULL PRIMARY KEY,
 	user_address CHAR(32) NOT NULL,
 	device_address CHAR(33) NOT NULL,
@@ -32,9 +36,8 @@ CREATE TABLE vouchers (
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
 );
-
-
-CREATE TABLE transactions (
+-- query separator
+CREATE TABLE IF NOT EXISTS transactions (
 	transaction_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	receiving_address CHAR(32) NOT NULL,
 	price INT NOT NULL,
@@ -55,10 +58,9 @@ CREATE TABLE transactions (
 	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE,
 	FOREIGN KEY (voucher) REFERENCES vouchers(voucher) ON DELETE CASCADE
 );
-CREATE INDEX byScanResult ON transactions(scan_result);
-
-
-CREATE TABLE attestation_units (
+CREATE INDEX IF NOT EXISTS byScanResult ON transactions(scan_result);
+-- query separator
+CREATE TABLE IF NOT EXISTS attestation_units (
 	transaction_id INTEGER NOT NULL,
 	attestation_type CHAR(20) NOT NULL,
 	attestation_unit CHAR(44) NULL UNIQUE,
@@ -67,8 +69,8 @@ CREATE TABLE attestation_units (
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
 	FOREIGN KEY (attestation_unit) REFERENCES units(unit)
 );
-
-CREATE TABLE rejected_payments (
+-- query separator
+CREATE TABLE IF NOT EXISTS rejected_payments (
 	rejected_payment_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	receiving_address CHAR(32) NOT NULL,
 	price INT NOT NULL,
@@ -80,16 +82,16 @@ CREATE TABLE rejected_payments (
 	FOREIGN KEY (receiving_address) REFERENCES receiving_addresses(receiving_address),
 	FOREIGN KEY (payment_unit) REFERENCES units(unit) ON DELETE CASCADE
 );
-
-CREATE TABLE contracts (
+-- query separator
+CREATE TABLE IF NOT EXISTS contracts (
 	user_address CHAR(32) NOT NULL PRIMARY KEY,
 	contract_address CHAR(32) NOT NULL UNIQUE,
 	contract_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	contract_vesting_date TIMESTAMP NOT NULL,
 	FOREIGN KEY (contract_address) REFERENCES shared_addresses(shared_address)
 );
-
-CREATE TABLE reward_units (
+-- query separator
+CREATE TABLE IF NOT EXISTS reward_units (
 	transaction_id INTEGER NOT NULL PRIMARY KEY,
 	device_address CHAR(33) NOT NULL UNIQUE,
 	user_address CHAR(32) NOT NULL UNIQUE,
@@ -104,8 +106,8 @@ CREATE TABLE reward_units (
 	FOREIGN KEY (reward_unit) REFERENCES units(unit),
 	FOREIGN KEY (donation_unit) REFERENCES units(unit)
 );
-
-CREATE TABLE referral_reward_units (
+-- query separator
+CREATE TABLE IF NOT EXISTS referral_reward_units (
 	transaction_id INTEGER NOT NULL PRIMARY KEY,
 	user_address CHAR(32) NOT NULL,
 	user_id CHAR(44) NOT NULL,
@@ -125,7 +127,7 @@ CREATE TABLE referral_reward_units (
 ALTER TABLE reward_units ADD COLUMN device_address CHAR(33) NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS reward_units_by_device_address ON reward_units(device_address);
 
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
 	user_address CHAR(32) NOT NULL PRIMARY KEY,
 	contract_address CHAR(32) NOT NULL UNIQUE,
 	contract_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -141,8 +143,8 @@ ALTER TABLE reward_units ADD COLUMN donation_unit CHAR(44) NULL;
 CREATE INDEX IF NOT EXISTS reward_units_by_donation ON reward_units(donated, donation_unit);
 
 */
-
-CREATE TABLE voucher_transactions (
+-- query separator
+CREATE TABLE IF NOT EXISTS voucher_transactions (
 	voucher CHAR(13) NOT NULL,
 	transaction_id INT NULL,
 	amount INT NOT NULL,

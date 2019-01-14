@@ -7,6 +7,9 @@ const notifications = require('./notifications.js');
 //require('request-debug')(request);
 
 function sendRestRequest(url, onDone){
+	if (!conf.apiToken || !conf.apiSecret) {
+		throw Error("jumio credentials missing");
+	}
 	let headers = {
 		"Content-Type": "application/json",
 		"User-Agent": "Byteball attestation/1.0"
@@ -53,6 +56,9 @@ function retrieveScanData(jumioIdScanReference, onDone){
 }
 
 function initScan(user_address, scanReference, onDone){
+	if (!conf.apiToken || !conf.apiSecret) {
+		throw Error("jumio credentials missing");
+	}
 //	let auth = "Basic " + new Buffer(conf.apiToken + ":" + conf.apiSecret).toString("base64");
 	let headers = {
 		"Content-Type": "application/json",
@@ -95,11 +101,14 @@ function convertRestResponseToCallbackFormat(body){
 		idLastName: body.document.lastName,
 		idDob: body.document.dob,
 		gender: body.document.gender,
+		personalCode: '', // incomplete data
 		idCountry: body.document.issuingCountry,
 		idUsState: body.document.usState,
 		idNumber: body.document.number,
 		idType: body.document.type,
 		idSubtype: body.document.idSubtype,
+		idExpiry: body.document.idExpiry,
+		idIssuedAt: body.document.issuingDate,
 		clientIp: body.transaction.clientIp
 	};
 	if (body.verification)
