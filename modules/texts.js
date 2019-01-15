@@ -7,7 +7,7 @@ const conversion = require('./conversion.js');
 
 exports.greeting = () => {
 	let objSteemDiscount = conf.discounts['JEDZYC2HMGDBIDQKG3XSTXUSHMCBK725'].discount_levels[0];
-	return "Here you can attest your real name.\n\nYour real name and other personal information (date of birth, document number, country, etc) will be saved privately in your wallet, only a proof of attestation will be posted publicly on the distributed ledger. The very fact of being attested may give you access to some services or tokens, even without disclosing your real name. Some apps may request you to reveal some of the fields of your attested profile, you choose what to reveal and to which app.\n\nIf you are a non-US citizen, we will offer you to attest this fact, this information is always public. This is useful for participation in some ICOs which restrict access to their tokens only to non-US citizens.\n\nIf you are an attested Steem user with reputation over "+objSteemDiscount.reputation+", you get a "+objSteemDiscount.discount+"% discount from the attestation price.\n\nAfter you successfully verify yourself for the first time, you receive a $"+(conf.rewardInUSD+conf.contractRewardInUSD).toLocaleString([], {minimumFractionDigits: 2})+" reward in Bytes which consists of two parts: $"+conf.rewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" is immediately spendable while $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" is locked on a smart contract that can be spent after "+conf.contractTerm+" year.";
+	return "Here you can attest your real name.\n\nYour real name and other personal information (date of birth, document number, country, etc) will be saved privately in your wallet, only a proof of attestation will be posted publicly on the distributed ledger. The very fact of being attested may give you access to some services or tokens, even without disclosing your real name. Some apps may request you to reveal some of the fields of your attested profile, you choose what to reveal and to which app.\n\nIf you are a non-US citizen, we will offer you to attest this fact, this information is always public. This is useful for participation in some ICOs which restrict access to their tokens only to non-US citizens.\n\nIf you are an attested Steem user with reputation over "+objSteemDiscount.reputation+", you get a "+objSteemDiscount.discount+"% discount from the attestation price.\n\nAfter you successfully verify yourself for the first time, you receive reward in Bytes which consists of two parts: the refunded attestation fee, which is immediately spendable while $"+conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" is locked on a smart contract that can be spent after "+conf.contractTerm+" year.";
 };
 
 exports.attestNonUS = () => {
@@ -55,6 +55,8 @@ exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
 };
 
 exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
+	if (!price)
+		throw Error("price missing");
 	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price})`;
 };
 
@@ -131,6 +133,8 @@ exports.pleasePayOrProvider = (receiving_address, price, user_address, service_p
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
+	if (!price)
+		throw Error("price missing");
 	let text = `Click to pay: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
 	if (!have_attestation)
 		text += ` or if you have a smart voucher, insert it below.`;
@@ -166,7 +170,7 @@ exports.previousAttestationFailed = () => {
 };
 
 exports.pleaseDonate = () => {
-	let amount = (conf.rewardInUSD + conf.contractRewardInUSD).toLocaleString([], {minimumFractionDigits: 2});
+	let amount = (conf.donationInUSD).toLocaleString([], {minimumFractionDigits: 2});
 	return "You now have an option to donate $"+amount+" to the Byteball Community Fund. The donation is used to pay for initiatives to increase adoption. The donation will be made from the undistributed funds on behalf of you. Your decision will not affect your reward. Do you wish to donate $"+amount+"? \n\n[Yes](command:donate yes)\t[No](command:donate no)\n\nSee https://medium.com/byteball/distribution-to-verified-users-and-referrals-episode-ii-29b6f1cd4ecc to learn what donations are used for.";
 };
 
