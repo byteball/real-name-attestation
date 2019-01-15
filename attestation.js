@@ -286,13 +286,9 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 						else
 							device.sendMessageToDevice(row.device_address, 'text', texts.pleaseDonate());
 					}, 2000);
-					if (conf.contractRewardInUSD){
-						let voucherInfo = null;
-						if (row.voucher) {
-							voucherInfo = await voucher.getInfo(row.voucher);
-						}
-						let rewardInBytes = voucherInfo ? 0 : row.received_amount;
-						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
+					if (conf.bRefundAttestationFee || conf.contractRewardInUSD){
+						let rewardInBytes = conf.bRefundAttestationFee ? row.received_amount : 0;
+						let contractRewardInBytes = conf.contractRewardInUSD ? conversion.getPriceInBytes(conf.contractRewardInUSD) : 0;
 						db.query(
 							"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
 							[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes, contractRewardInBytes], 
@@ -303,18 +299,25 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 									return unlock();
 								}
 								let [contract_address, vesting_ts] = await contract.createContract(row.user_address, row.device_address);
-								let message = `You were attested for the first time`;
-								if (rewardInBytes > 0)
-									message += ` and your attestation fee (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) will be refunded.`;
-								
+								let message = '';
+								if (rewardInBytes > 0) {
+									message += `You were attested for the first time and your attestation fee (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) will be refunded from Byteball distribution fund.`;
+								}
+								else {
+									message += `You were attested for the first time.`;
+								}
 								message += ` You will ${rewardInBytes ? 'also ' : ''}receive a reward of $${conf.contractRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(contractRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) that will be locked on a smart contract for ${conf.contractTerm} year and can be spent only after ${new Date(vesting_ts).toDateString()}.`;
 
 								device.sendMessageToDevice(row.device_address, 'text', message);
 								reward.sendAndWriteReward('attestation', transaction_id);
 
 								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
-									let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
-									let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
+									let referralRewardInBytes = conf.referralRewardInUSD ? conversion.getPriceInBytes(conf.referralRewardInUSD) : 0;
+									let contractReferralRewardInBytes = conf.contractReferralRewardInUSD ? conversion.getPriceInBytes(conf.contractReferralRewardInUSD) : 0;
+									let voucherInfo = null;
+									if (row.voucher) {
+										voucherInfo = await voucher.getInfo(row.voucher);
+									}
 									if (row.payment_unit) {
 										reward.findReferrer(row.payment_unit, async (referring_user_id, referring_user_address, referring_user_device_address) => {
 											if (!referring_user_address){
@@ -361,8 +364,15 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 												let user_id = payload.profile.user_id;
 												if (!user_id)
 													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
+												
 												let amountUSD = conf.referralRewardInUSD+conf.contractReferralRewardInUSD;
-												let amount = conversion.getPriceInBytes(amountUSD) + row.received_amount;
+												if (row.service_provider === 'smartid') {
+													amountUSD += conf.priceInUSDforSmartID;
+												}
+												else {
+													amountUSD += conf.priceInUSD;
+												}
+												let amount = amountUSD ? conversion.getPriceInBytes(amountUSD) : 0;
 
 												db.query(
 													`INSERT ${db.getIgnore()} INTO referral_reward_units
@@ -371,7 +381,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB. Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB). Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
@@ -481,7 +491,7 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			if (tokens.length == 3) {
 				let usd_price = tokens[2];
-				let price = conversion.getPriceInBytes(usd_price);
+				let price = usd_price ? conversion.getPriceInBytes(usd_price) : 0;
 				return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
 			}
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
