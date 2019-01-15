@@ -288,7 +288,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 					}, 2000);
 					if (conf.bRefundAttestationFee || conf.contractRewardInUSD){
 						let rewardInBytes = conf.bRefundAttestationFee ? row.received_amount : 0;
-						let contractRewardInBytes = conf.contractRewardInUSD ? conversion.getPriceInBytes(conf.contractRewardInUSD) : 0;
+						let contractRewardInBytes = conversion.getPriceInBytes(conf.contractRewardInUSD);
 						db.query(
 							"INSERT "+db.getIgnore()+" INTO reward_units (transaction_id, device_address, user_address, user_id, reward, contract_reward) VALUES (?, ?,?,?, ?,?)", 
 							[transaction_id, row.device_address, row.user_address, attestation.profile.user_id, rewardInBytes, contractRewardInBytes], 
@@ -312,8 +312,8 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 								reward.sendAndWriteReward('attestation', transaction_id);
 
 								if (conf.referralRewardInUSD || conf.contractReferralRewardInUSD){
-									let referralRewardInBytes = conf.referralRewardInUSD ? conversion.getPriceInBytes(conf.referralRewardInUSD) : 0;
-									let contractReferralRewardInBytes = conf.contractReferralRewardInUSD ? conversion.getPriceInBytes(conf.contractReferralRewardInUSD) : 0;
+									let referralRewardInBytes = conversion.getPriceInBytes(conf.referralRewardInUSD);
+									let contractReferralRewardInBytes = conversion.getPriceInBytes(conf.contractReferralRewardInUSD);
 									let voucherInfo = null;
 									if (row.voucher) {
 										voucherInfo = await voucher.getInfo(row.voucher);
@@ -372,7 +372,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 												else {
 													amountUSD += conf.priceInUSD;
 												}
-												let amount = amountUSD ? conversion.getPriceInBytes(amountUSD) : 0;
+												let amount = conversion.getPriceInBytes(amountUSD);
 
 												db.query(
 													`INSERT ${db.getIgnore()} INTO referral_reward_units
@@ -491,8 +491,9 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			if (tokens.length == 3) {
 				let usd_price = tokens[2];
-				let price = usd_price ? conversion.getPriceInBytes(usd_price) : 0;
-				return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
+				let price = conversion.getPriceInBytes(usd_price);
+				if (price)
+					return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
 			}
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
 		}

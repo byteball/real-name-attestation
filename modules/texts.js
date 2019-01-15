@@ -55,6 +55,8 @@ exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
 };
 
 exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
+	if (!price)
+		throw Error("price missing");
 	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price})`;
 };
 
@@ -131,6 +133,8 @@ exports.pleasePayOrProvider = (receiving_address, price, user_address, service_p
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
+	if (!price)
+		throw Error("price missing");
 	let text = `Click to pay: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
 	if (!have_attestation)
 		text += ` or if you have a smart voucher, insert it below.`;
