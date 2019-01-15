@@ -657,7 +657,7 @@ function respond(from_address, text, response){
 					response += texts.providerJumio() + "\n\n";
 			}
 			if (!userInfo.service_provider)
-				return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders() + "\n\n" + texts.selectProvider());
+				return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders());
 			
 			readOrAssignReceivingAddress(from_address, userInfo.user_address, userInfo.service_provider, async (receiving_address) => {
 				let objDiscountedPriceInUSD = await getPriceInUSD(userInfo.user_address, userInfo.service_provider);

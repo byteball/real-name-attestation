@@ -79,30 +79,36 @@ exports.goingToAttest = (user_address) => {
 	return `Thanks, going to attest your address ${user_address}. Your personal data will be kept private and stored in your wallet.`;
 }
 
-exports.welcomeProviders = () => {
+exports.welcomeProviders = (service_provider) => {
+	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
+	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
 	let jumioPrice = conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2});
 	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2});
-	return `Jumio Netverify is available worldwide. It uses your webcam to take photos of your Passport, ID, Driver License, other Docs and it costs $${jumioPrice} per attempt.
+	return `Please select an attestation service provider:
 
+[Jumio Netverify](command:jumio) ${jumioSelected}
+Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver license and it costs $${jumioPrice} per attempt.
+
+[Smart ID Estonia](command:smartid) ${smartidSelected}
 Smart ID Estonia is available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia. You can use ID-card, Mobile-ID, Smart-ID and it costs $${smartidPrice} per attempt.`;
 }
 
 exports.providerJumio = () => {
-	return "After payment, you will be redirected to Jumio website for your document (ID, driver's licence, passport) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
+	return "After payment, you will be redirected to Jumio website for your document (ID card, driver's licence, passport) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
 
 exports.providerSmartID = () => {
-	return "After payment, you will be redirected to Smart ID Estonia website for authentication. You need to authenticate with ID-card, Mobile-ID or Smart-ID (available for residents of Estonia, Latvia, Lithuania or e-residents of Estonia).\n\nThe price of attestation is $"+conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
+	return "After payment, you will be redirected to Smart ID Estonia website for authentication. You need to authenticate with ID-card, Mobile-ID or Smart-ID (available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia).\n\nThe price of attestation is $"+conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
 
 exports.selectedOption = () => {
 	return `(selected)`;
 };
-
+/*
 exports.selectProvider = (service_provider) => {
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
 	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
-	return `Please select a attestation service provider?
+	return `Please select an attestation service provider:
 	* [Jumio Netverify](command:jumio) ${jumioSelected}
 	* [Smart ID Estonia](command:smartid) ${smartidSelected}`;
 };
@@ -110,9 +116,18 @@ exports.selectProvider = (service_provider) => {
 exports.orPay = () => {
 	return `or pay for the attestation.`;
 };
+*/
+
+function displayProvider(service_provider){
+	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
+	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
+	return `Currently selected attestation service provider:
+	* [Jumio Netverify](command:jumio) ${jumioSelected}
+	* [Smart ID Estonia](command:smartid) ${smartidSelected}`;
+}
 
 exports.pleasePayOrProvider = (receiving_address, price, user_address, service_provider, objDiscountedPriceInUSD, have_attestation) => {
-	return (service_provider === null) ? exports.welcomeProviders() +"\n\n"+ exports.selectProvider() : exports.selectProvider(service_provider) + "\n" + exports.orPay() + "\n\n" + exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation);
+	return (service_provider === null) ? exports.welcomeProviders() : displayProvider(service_provider) + "\n\n" + exports.pleasePay(receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation);
 };
 
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
@@ -138,7 +153,7 @@ exports.switchToSingleAddress = () => {
 };
 
 exports.alreadyAttested = (attestation_date) => {
-	return "You were already attested at "+attestation_date+" UTC. Attest [same address again](command: again) or insert new address.";
+	return "You were already attested at "+attestation_date+" UTC. Attest [same address again](command: again) or insert another address.";
 };
 
 exports.alreadyAttestedInUnit = (attestation_unit) => {
