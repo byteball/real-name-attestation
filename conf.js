@@ -47,7 +47,7 @@ exports.apiSecret = '';
 // id.smartid.ee api credentials 
 exports.apiSmartIdToken = '';
 exports.apiSmartIdSecret = '';
-exports.apiSmartIdCallback = 'http://localhost:8080/done';
+exports.apiSmartIdCallback = 'https://oid.one/done';
 
 exports.priceInUSD = 8;
 exports.priceInUSDforSmartID = 0.5;
