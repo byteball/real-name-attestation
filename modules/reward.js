@@ -1,7 +1,7 @@
 /*jslint node: true */
 'use strict';
-const conf = require('byteballcore/conf');
-const db = require('byteballcore/db');
+const conf = require('ocore/conf');
+const db = require('ocore/db');
 const notifications = require('./notifications');
 const realNameAttestation = require('./real_name_attestation.js');
 
@@ -10,7 +10,7 @@ const MAX_REFERRAL_DEPTH = 5;
 exports.distribution_address = null;
 
 function sendReward(outputs, device_address, onDone){
-	let headlessWallet = require('headless-byteball');
+	let headlessWallet = require('headless-obyte');
 	headlessWallet.sendMultiPayment({
 		asset: null,
 		base_outputs: outputs,
@@ -20,7 +20,7 @@ function sendReward(outputs, device_address, onDone){
 	}, (err, unit) => {
 		if (err){
 			console.log("failed to send reward: "+err);
-			let balances = require('byteballcore/balances');
+			let balances = require('ocore/balances');
 			balances.readOutputsBalance(exports.distribution_address, (balance) => {
 				console.error(exports.distribution_address, balance);
 				notifications.notifyAdmin('failed to send reward', err + ", balance: " + JSON.stringify(balance));
@@ -33,7 +33,7 @@ function sendReward(outputs, device_address, onDone){
 }
 
 function sendAndWriteReward(reward_type, transaction_id){
-	const mutex = require('byteballcore/mutex.js');
+	const mutex = require('ocore/mutex.js');
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		let table = (reward_type === 'referral') ? 'referral_reward_units' : 'reward_units';
 		let	sql = `SELECT
@@ -73,7 +73,7 @@ function sendAndWriteReward(reward_type, transaction_id){
 						"UPDATE "+table+" SET reward_unit=?, reward_date="+db.getNow()+" WHERE transaction_id=?", 
 						[unit, transaction_id], 
 						() => {
-							let device = require('byteballcore/device.js');
+							let device = require('ocore/device.js');
 							device.sendMessageToDevice(row.device_address, 'text', "Sent the "+reward_type+" reward");
 							unlock();
 						}
@@ -97,7 +97,7 @@ function retrySendingRewardsOfType(reward_type){
 }
 
 function retrySendingRewards(){
-	const network = require('byteballcore/network.js');
+	const network = require('ocore/network.js');
 	if (network.isCatchingUp())
 		return;
 	retrySendingRewardsOfType('attestation');
@@ -173,14 +173,14 @@ function findReferrer(payment_unit, handleReferrer){
 }
 
 function sendDonations(){
-	const mutex = require('byteballcore/mutex.js');
+	const mutex = require('ocore/mutex.js');
 	mutex.lockOrSkip(['donations'], unlock => {
 		db.query("SELECT transaction_id, reward, contract_reward FROM reward_units WHERE donated=1 AND donation_unit IS NULL", rows => {
 			if (rows.length === 0)
 				return unlock();
 			let arrTransactionIds = rows.map(row => row.transaction_id);
 			let amount = rows.reduce((acc, row) => acc + row.reward + row.contract_reward, 0); // equal to total rewards
-			let headlessWallet = require('headless-byteball');
+			let headlessWallet = require('headless-obyte');
 			headlessWallet.sendMultiPayment({
 				asset: null,
 				to_address: conf.cf_address,

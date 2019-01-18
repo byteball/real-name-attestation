@@ -1,7 +1,7 @@
 /*jslint node: true */
 'use strict';
 const request = require('request');
-const conf = require('byteballcore/conf.js');
+const conf = require('ocore/conf.js');
 const notifications = require('./notifications.js');
 
 function getLoginUrl(stateReference) {
@@ -17,7 +17,7 @@ function getAccessToken(grantCode, onDone){
 	}
 	let headers = {
 		"Content-Type": "application/json",
-		"User-Agent": "Byteball attestation/1.0"
+		"User-Agent": "Obyte attestation/1.0"
 	};
 	let form_data = {
 		code: grantCode,
@@ -49,7 +49,7 @@ function getUserData(access_token, onDone){
 	}
 	let headers = {
 		"Content-Type": "application/json",
-		"User-Agent": "Byteball attestation/1.0"
+		"User-Agent": "Obyte attestation/1.0"
 	};
 	request({
 		url: "https://id.smartid.ee/api/v2/user_data?access_token=" + access_token, 

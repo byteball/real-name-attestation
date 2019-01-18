@@ -1,7 +1,7 @@
 /*jslint node: true */
 'use strict';
 const request = require('request');
-const conf = require('byteballcore/conf.js');
+const conf = require('ocore/conf.js');
 const notifications = require('./notifications.js');
 
 //require('request-debug')(request);
@@ -12,7 +12,7 @@ function sendRestRequest(url, onDone){
 	}
 	let headers = {
 		"Content-Type": "application/json",
-		"User-Agent": "Byteball attestation/1.0"
+		"User-Agent": "Obyte attestation/1.0"
 	};
 	request({
 		url: url, 
@@ -62,7 +62,7 @@ function initScan(user_address, scanReference, onDone){
 //	let auth = "Basic " + new Buffer(conf.apiToken + ":" + conf.apiSecret).toString("base64");
 	let headers = {
 		"Content-Type": "application/json",
-		"User-Agent": "Byteball attestation/1.0"
+		"User-Agent": "Obyte attestation/1.0"
 	};
 	let json = {
 	//	merchantIdScanReference: scanReference,

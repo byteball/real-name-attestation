@@ -22,7 +22,7 @@ exports.bSingleAddress = false;
 exports.bStaticChangeAddress = true;
 exports.KEYS_FILENAME = 'keys.json';
 
-// smtp https://github.com/byteball/byteballcore/blob/master/mail.js
+// smtp https://github.com/byteball/ocore/blob/master/mail.js
 exports.smtpTransport = 'local'; // use 'local' for Unix Sendmail
 exports.smtpRelay = '';
 exports.smtpUser = '';

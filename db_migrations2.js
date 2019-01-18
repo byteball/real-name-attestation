@@ -1,6 +1,6 @@
 /*jslint node: true */
 'use strict';
-const db = require('byteballcore/db');
+const db = require('ocore/db');
 
 module.exports = function() {
 	return new Promise(resolve => {

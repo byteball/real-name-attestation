@@ -1,7 +1,7 @@
 /*jslint node: true */
 'use strict';
-const desktopApp = require('byteballcore/desktop_app.js');
-const conf = require('byteballcore/conf.js');
+const desktopApp = require('ocore/desktop_app.js');
+const conf = require('ocore/conf.js');
 const conversion = require('./conversion.js');
 
 
@@ -11,7 +11,7 @@ exports.greeting = () => {
 };
 
 exports.attestNonUS = () => {
-	return "You are a non-US citizen. Do you want this fact to be also attested?  This information will be public, i.e. everybody will be able to see that your Byteball address belongs to a non-US citizen, but nothing else will be disclosed.\n\n[Yes, attest that I'm a non-US citizen](command:attest non-US)";
+	return "You are a non-US citizen. Do you want this fact to be also attested?  This information will be public, i.e. everybody will be able to see that your Obyte address belongs to a non-US citizen, but nothing else will be disclosed.\n\n[Yes, attest that I'm a non-US citizen](command:attest non-US)";
 };
 
 exports.depositVoucher = (voucher = 'XXXXXXXXX', amount = conf.priceInUSD) => {
@@ -161,7 +161,7 @@ exports.alreadyAttested = (attestation_date) => {
 };
 
 exports.alreadyAttestedInUnit = (attestation_unit) => {
-	let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.byteball.org/#' : 'https://explorer.byteball.org/#');
+	let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
 	return `You were already attested in ${explorer}${attestation_unit}`;
 };
 
@@ -171,11 +171,11 @@ exports.previousAttestationFailed = () => {
 
 exports.pleaseDonate = () => {
 	let amount = (conf.donationInUSD).toLocaleString([], {minimumFractionDigits: 2});
-	return "You now have an option to donate $"+amount+" to the Byteball Community Fund. The donation is used to pay for initiatives to increase adoption. The donation will be made from the undistributed funds on behalf of you. Your decision will not affect your reward. Do you wish to donate $"+amount+"? \n\n[Yes](command:donate yes)\t[No](command:donate no)\n\nSee https://medium.com/byteball/distribution-to-verified-users-and-referrals-episode-ii-29b6f1cd4ecc to learn what donations are used for.";
+	return "You now have an option to donate $"+amount+" to the Obyte Community Fund. The donation is used to pay for initiatives to increase adoption. The donation will be made from the undistributed funds on behalf of you. Your decision will not affect your reward. Do you wish to donate $"+amount+"? \n\n[Yes](command:donate yes)\t[No](command:donate no)\n\nSee https://medium.com/byteball/distribution-to-verified-users-and-referrals-episode-ii-29b6f1cd4ecc to learn what donations are used for.";
 };
 
 exports.referredNewUser = (reward_text) => {
-	return "You referred a user who has just verified his identity "+reward_text+". Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!";
+	return "You referred a user who has just verified his identity "+reward_text+". Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!";
 }
 
 //errors

@@ -1,7 +1,7 @@
 /*jslint node: true */
 'use strict';
 const fs = require('fs');
-const db = require('byteballcore/db.js');
+const db = require('ocore/db.js');
 
 let db_sql = fs.readFileSync('db.sql', 'utf8');
 db_sql.split('-- query separator').forEach(function(sql) {

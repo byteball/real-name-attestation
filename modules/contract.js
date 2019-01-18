@@ -1,12 +1,12 @@
 /*jslint node: true */
 'use strict';
-const conf = require('byteballcore/conf');
-const db = require('byteballcore/db');
+const conf = require('ocore/conf');
+const db = require('ocore/db');
 const reward = require('./reward');
 
 
 function createContract(user_address, device_address){
-	let device = require('byteballcore/device.js');
+	let device = require('ocore/device.js');
 	let date = new Date();
 	date.setUTCHours(0,0,0,0);
 	let current_year = date.getUTCFullYear();
@@ -36,7 +36,7 @@ function createContract(user_address, device_address){
 	};
 
 	return new Promise(resolve => {
-		let walletDefinedByAddresses = require('byteballcore/wallet_defined_by_addresses.js');
+		let walletDefinedByAddresses = require('ocore/wallet_defined_by_addresses.js');
 		walletDefinedByAddresses.createNewSharedAddress(arrDefinition, assocSignersByPath, {
 			ifError: (err) => {
 				throw new Error(err);

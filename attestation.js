@@ -1,13 +1,13 @@
 /*jslint node: true */
 'use strict';
-const constants = require('byteballcore/constants.js');
-const conf = require('byteballcore/conf');
-const db = require('byteballcore/db');
-const eventBus = require('byteballcore/event_bus.js');
+const constants = require('ocore/constants.js');
+const conf = require('ocore/conf');
+const db = require('ocore/db');
+const eventBus = require('ocore/event_bus.js');
 const texts = require('./modules/texts.js');
 const db_migrations = require('./db_migrations.js');
 const db_migrations2 = require('./db_migrations2.js');
-const validationUtils = require('byteballcore/validation_utils');
+const validationUtils = require('ocore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
 const smartidApi = require('./modules/smartid_api.js');
@@ -23,7 +23,7 @@ const bodyParser = require('body-parser');
 const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
-const mutex = require('byteballcore/mutex.js');
+const mutex = require('ocore/mutex.js');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
@@ -61,7 +61,7 @@ function readOrAssignReceivingAddress(device_address, user_address, service_prov
 					cb(row.receiving_address);
 					return unlock();
 				}
-				const headlessWallet = require('headless-byteball');
+				const headlessWallet = require('headless-obyte');
 				headlessWallet.issueNextMainAddress(receiving_address => {
 					db.query(
 						"INSERT INTO receiving_addresses (device_address, user_address, service_provider, receiving_address, post_publicly) VALUES(?,?,?,?,0)",
@@ -85,7 +85,7 @@ function updatePrice(receiving_address, price, cb){
 }
 
 function moveFundsToAttestorAddresses(){
-	let network = require('byteballcore/network.js');
+	let network = require('ocore/network.js');
 	if (network.isCatchingUp())
 		return;
 	console.log('moveFundsToAttestorAddresses');
@@ -99,7 +99,7 @@ function moveFundsToAttestorAddresses(){
 			if (rows.length === 0)
 				return;
 			let arrAddresses = rows.map(row => row.receiving_address);
-			let headlessWallet = require('headless-byteball');
+			let headlessWallet = require('headless-obyte');
 			let timestampMod = Date.now()%3;
 			headlessWallet.sendMultiPayment({
 				asset: null,
@@ -246,7 +246,7 @@ function handleSmartIdData(transaction_id, body){
 }
 
 function handleAttestation(transaction_id, body, data, scan_result, error) {
-	let device = require('byteballcore/device.js');
+	let device = require('ocore/device.js');
 
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		db.query(
@@ -301,7 +301,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 								let [contract_address, vesting_ts] = await contract.createContract(row.user_address, row.device_address);
 								let message = '';
 								if (rewardInBytes > 0) {
-									message += `You were attested for the first time and your attestation fee (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) will be refunded from Byteball distribution fund.`;
+									message += `You were attested for the first time and your attestation fee (${(rewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) will be refunded from Obyte distribution fund.`;
 								}
 								else {
 									message += `You were attested for the first time.`;
@@ -340,8 +340,8 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 														return unlock();
 													}
 													let reward_text = referralRewardInBytes
-														? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund"
-														: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Byteball distribution fund. The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
+														? "and you will receive a reward of $"+conf.referralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(referralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Obyte distribution fund"
+														: "and you will receive a reward of $"+conf.contractReferralRewardInUSD.toLocaleString([], {minimumFractionDigits: 2})+" ("+(contractReferralRewardInBytes/1e9).toLocaleString([], {maximumFractionDigits: 9})+" GB) from Obyte distribution fund. The reward will be paid to a smart contract which can be spent after "+new Date(referrer_vesting_date_ts).toDateString();
 													device.sendMessageToDevice(referring_user_device_address, 'text', texts.referredNewUser(reward_text));
 													reward.sendAndWriteReward('referral', transaction_id);
 													unlock();
@@ -381,7 +381,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB). Thank you for bringing in a new byteballer, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB). Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
@@ -414,7 +414,7 @@ async function getPriceInUSD(user_address, service_provider){
 }
 
 function respond(from_address, text, response){
-	let device = require('byteballcore/device.js');
+	let device = require('ocore/device.js');
 	let lc_text = text.toLowerCase();
 	readUserInfo(from_address, async (userInfo) => {
 		
@@ -574,7 +574,7 @@ function respond(from_address, text, response){
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let signedMessageBase64 = arrSignedMessageMatches[1];
-			var validation = require('byteballcore/validation.js');
+			var validation = require('ocore/validation.js');
 			var signedMessageJson = Buffer(signedMessageBase64, 'base64').toString('utf8');
 			try{
 				var objSignedMessage = JSON.parse(signedMessageJson);
@@ -742,9 +742,9 @@ eventBus.on('paired', from_address => {
 });
 
 eventBus.once('headless_and_rates_ready', () => {
-	const headlessWallet = require('headless-byteball');
+	const headlessWallet = require('headless-obyte');
 	if (conf.bRunWitness){
-		require('byteball-witness');
+		require('obyte-witness');
 		eventBus.emit('headless_wallet_ready');
 	}
 	else
@@ -754,7 +754,7 @@ eventBus.once('headless_and_rates_ready', () => {
 	});
 	
 	eventBus.on('new_my_transactions', arrUnits => {
-		let device = require('byteballcore/device.js');
+		let device = require('ocore/device.js');
 		console.log("new_my_transactions units:", arrUnits);
 		db.query(
 			`SELECT amount, asset, device_address, receiving_address, service_provider, user_address, unit, price, ${db.getUnixTimestamp('last_price_date')} AS price_ts, NULL AS from_distribution
@@ -844,7 +844,7 @@ eventBus.once('headless_and_rates_ready', () => {
 	});
 	
 	eventBus.on('my_transactions_became_stable', arrUnits => {
-		let device = require('byteballcore/device.js');
+		let device = require('ocore/device.js');
 		db.query( // transactions
 			`SELECT transaction_id, device_address, user_address, service_provider
 			FROM transactions JOIN receiving_addresses USING(receiving_address)
@@ -903,7 +903,7 @@ eventBus.once('headless_wallet_ready', () => {
 		await db_migrations();
 		await db_migrations2();
 		
-		let headlessWallet = require('headless-byteball');
+		let headlessWallet = require('headless-obyte');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
 			console.log('== jumio attestation address: '+address1);
 			realNameAttestation.assocAttestorAddresses['jumio'] = address1;
@@ -926,7 +926,7 @@ eventBus.once('headless_wallet_ready', () => {
 						setInterval(moveFundsToAttestorAddresses, 60*1000);
 						setInterval(reward.sendDonations, 7*24*3600*1000);
 						
-						const consolidation = require('headless-byteball/consolidation.js');
+						const consolidation = require('headless-obyte/consolidation.js');
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['smartid'], headlessWallet.signer, 100, 3600*1000);
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);

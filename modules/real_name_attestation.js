@@ -1,8 +1,8 @@
 /*jslint node: true */
 'use strict';
-const conf = require('byteballcore/conf');
-const objectHash = require('byteballcore/object_hash.js');
-const db = require('byteballcore/db');
+const conf = require('ocore/conf');
+const objectHash = require('ocore/object_hash.js');
+const db = require('ocore/db');
 const notifications = require('./notifications');
 const smartidApi = require('./smartid_api.js');
 const jumioApi = require('./jumio_api.js');
@@ -78,7 +78,7 @@ function getNonUSAttestationPayload(user_address){
 }
 
 function hideProfile(profile){
-	let composer = require('byteballcore/composer.js');
+	let composer = require('ocore/composer.js');
 	let hidden_profile = {};
 	let src_profile = {};
 	for (let field in profile){
@@ -103,9 +103,9 @@ function postAttestation(attestor_address, payload, onDone){
 		console.error(err);
 		onDone(err);
 	}
-	var network = require('byteballcore/network.js');
-	var composer = require('byteballcore/composer.js');
-	let headlessWallet = require('headless-byteball');
+	var network = require('ocore/network.js');
+	var composer = require('ocore/composer.js');
+	let headlessWallet = require('headless-obyte');
 	let objMessage = {
 		app: "attestation",
 		payload_location: "inline",
@@ -142,7 +142,7 @@ function postAttestation(attestor_address, payload, onDone){
 }
 
 function postAndWriteAttestation(transaction_id, attestation_type, attestor_address, attestation_payload, src_profile){
-	const mutex = require('byteballcore/mutex.js');
+	const mutex = require('ocore/mutex.js');
 	mutex.lock(['tx-'+transaction_id], unlock => {
 		db.query(
 			"SELECT device_address, attestation_date \n\
@@ -161,8 +161,8 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 						[unit, transaction_id, attestation_type], 
 						() => {
 						//	db.query("UPDATE transactions SET extracted_data='' WHERE transaction_id=?", [transaction_id]);
-							let device = require('byteballcore/device.js');
-							let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.byteball.org/#' : 'https://explorer.byteball.org/#');
+							let device = require('ocore/device.js');
+							let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
 							let text = (attestation_type === 'real name') ? "Now your real name is attested" : "Now you are attested as non-US citizen";
 							text += `, see the attestation unit: ${explorer}${unit}`;
 							if (src_profile){

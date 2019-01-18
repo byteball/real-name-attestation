@@ -1,15 +1,14 @@
 /*jslint node: true */
 'use strict';
-const conf = require('byteballcore/conf');
-const db = require('byteballcore/db');
-const chash = require('byteballcore/chash');
+const conf = require('ocore/conf');
+const db = require('ocore/db');
+const chash = require('ocore/chash');
 const conversion = require('./conversion.js');
-const headlessWallet = require('headless-byteball');
+const headlessWallet = require('headless-obyte');
 const contract = require('./contract.js');
 
 function issueNew(user_address, device_address){
 	return new Promise((resolve) => {
-		const headlessWallet = require('headless-byteball');
 		headlessWallet.issueNextMainAddress(receiving_address => {
 			let voucher = chash.getChash160(user_address + device_address + receiving_address + Date.now().toString()).substr(3, 13);
 			db.query(
