@@ -925,6 +925,7 @@ eventBus.once('headless_wallet_ready', () => {
 						setInterval(pollAndHandleJumioScanData, 300*1000);
 						setInterval(moveFundsToAttestorAddresses, 60*1000);
 						setInterval(reward.sendDonations, 7*24*3600*1000);
+						setInterval(serviceHelper.cleanExtractedData, 24*3600*1000);
 						
 						const consolidation = require('headless-obyte/consolidation.js');
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);

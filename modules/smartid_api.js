@@ -4,11 +4,11 @@ const request = require('request');
 const conf = require('ocore/conf.js');
 const notifications = require('./notifications.js');
 
-function getLoginUrl(stateReference) {
+function getLoginUrl(callbackReference) {
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback) {
 		throw Error("smartid credentials missing");
 	}
-	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(stateReference);
+	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(callbackReference);
 }
 
 function getAccessToken(grantCode, onDone){

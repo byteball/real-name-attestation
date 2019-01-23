@@ -160,7 +160,7 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 						"UPDATE attestation_units SET attestation_unit=?, attestation_date="+db.getNow()+" WHERE transaction_id=? AND attestation_type=?", 
 						[unit, transaction_id, attestation_type], 
 						() => {
-						//	db.query("UPDATE transactions SET extracted_data='' WHERE transaction_id=?", [transaction_id]);
+							// extracted_data is nulled in service_helper.cleanExtractedData()
 							let device = require('ocore/device.js');
 							let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
 							let text = (attestation_type === 'real name') ? "Now your real name is attested" : "Now you are attested as non-US citizen";
