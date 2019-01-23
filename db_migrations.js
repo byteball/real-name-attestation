@@ -49,7 +49,7 @@ module.exports = function() {
 						confirmation_date TIMESTAMP NULL,
 						scanReference CHAR(20) NULL UNIQUE,
 						authorizationToken VARCHAR(36) NULL,
-						jumioIdScanReference VARCHAR(44) NULL UNIQUE,
+						jumioIdScanReference VARCHAR(64) NULL UNIQUE,
 						scan_result TINYINT NULL, -- 1 success, 0 failure, NULL pending or abandoned
 						result_date TIMESTAMP NULL,
 						extracted_data VARCHAR(4096) NULL, -- json, nulled 1 week after posting the attestation unit

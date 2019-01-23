@@ -18,7 +18,7 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 				return;
 			}
 			let scanReference = transaction_id+'_smartid';
-			let callbackReference = objectHash.getBase64Hash([transaction_id, user_address, conf.salt]);
+			let callbackReference = objectHash.getHexHash([transaction_id, user_address, conf.salt]);
 			db.query(
 				"UPDATE transactions SET scanReference=?, jumioIdScanReference=? WHERE transaction_id=?", 
 				[scanReference, callbackReference, transaction_id],
@@ -44,7 +44,7 @@ function initAndWriteJumioScan(transaction_id, device_address, user_address, onD
 					onDone();
 				return;
 			}
-			let userReference = objectHash.getBase64Hash([user_address, conf.salt]);
+			let userReference = objectHash.getHexHash([user_address, conf.salt]);
 			let scanReference = transaction_id+'_jumio';
 			jumioApi.initScan(userReference, scanReference, function(err, redirect_url, callbackReference, authorizationToken){
 				if (err){
