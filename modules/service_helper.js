@@ -17,18 +17,18 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 					onDone();
 				return;
 			}
-			let scanReference = transaction_id+'_'+user_address;
-			let stateReference = objectHash.getBase64Hash([transaction_id, user_address, conf.salt]);
+			let scanReference = transaction_id+'_smartid';
+			let callbackReference = objectHash.getBase64Hash([transaction_id, user_address, conf.salt]);
 			db.query(
 				"UPDATE transactions SET scanReference=?, jumioIdScanReference=? WHERE transaction_id=?", 
-				[scanReference, stateReference, transaction_id],
+				[scanReference, callbackReference, transaction_id],
 				() => {
 					unlock();
 					if (onDone)
 						onDone();
+					return device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(callbackReference));
 				}
 			);
-			device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(stateReference));
 		});
 	});
 }
@@ -44,8 +44,9 @@ function initAndWriteJumioScan(transaction_id, device_address, user_address, onD
 					onDone();
 				return;
 			}
-			let scanReference = transaction_id+'_'+user_address;
-			jumioApi.initScan(user_address, scanReference, function(err, redirect_url, jumioIdScanReference, authorizationToken){
+			let userReference = objectHash.getBase64Hash([user_address, conf.salt]);
+			let scanReference = transaction_id+'_jumio';
+			jumioApi.initScan(userReference, scanReference, function(err, redirect_url, callbackReference, authorizationToken){
 				if (err){
 					unlock();
 					if (onDone)
@@ -54,14 +55,14 @@ function initAndWriteJumioScan(transaction_id, device_address, user_address, onD
 				}
 				db.query(
 					"UPDATE transactions SET scanReference=?, jumioIdScanReference=?, authorizationToken=? WHERE transaction_id=?", 
-					[scanReference, jumioIdScanReference, authorizationToken, transaction_id],
+					[scanReference, callbackReference, authorizationToken, transaction_id],
 					() => {
 						unlock();
 						if (onDone)
 							onDone();
+						return device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification within 30 minutes after clicking the link, have your document ready.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Jumio will take some time to process the images, usually minutes but occasionally hours.  We'll message you only when the final outcome is known.");
 					}
 				);
-				device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification within 30 minutes after clicking the link, have your document ready.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Jumio will take some time to process the images, usually minutes but occasionally hours.  We'll message you only when the final outcome is known.");
 			});
 		});
 	});
@@ -109,8 +110,13 @@ function pollJumioScanData(handleData){
 	);
 }
 
+function cleanExtractedData() {
+	db.query("UPDATE transactions SET extracted_data = NULL WHERE transaction_id IN (SELECT transaction_id FROM attestation_units JOIN transactions USING(transaction_id) WHERE extracted_data IS NOT NULL AND attestation_date IS NOT NULL AND attestation_date < "+ db.addTime('-7 day') + ");");
+}
+
 exports.initSmartIdLogin = initSmartIdLogin;
 exports.initAndWriteJumioScan = initAndWriteJumioScan;
 exports.retryInitScans = retryInitScans;
 exports.pollJumioScanData = pollJumioScanData;
+exports.cleanExtractedData = cleanExtractedData;
 

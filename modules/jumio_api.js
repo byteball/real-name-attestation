@@ -55,7 +55,7 @@ function retrieveScanData(jumioIdScanReference, onDone){
 	});
 }
 
-function initScan(user_address, scanReference, onDone){
+function initScan(userReference, scanReference, onDone){
 	if (!conf.apiToken || !conf.apiSecret) {
 		throw Error("jumio credentials missing");
 	}
@@ -66,9 +66,9 @@ function initScan(user_address, scanReference, onDone){
 	};
 	let json = {
 	//	merchantIdScanReference: scanReference,
-	//	customerId: user_address
+	//	customerId: userReference
 		customerInternalReference: scanReference,
-		userReference: user_address,
+		userReference: userReference,
 		tokenLifetimeInMinutes: 4320  // 3 days
 	};
 	request({
