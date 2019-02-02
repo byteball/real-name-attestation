@@ -490,9 +490,9 @@ function respond(from_address, text, response){
 			if (!voucherInfo)
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			if (tokens.length == 3) {
-				let usd_price = tokens[2];
+				let usd_price = parseFloat(tokens[2]);
 				let price = conversion.getPriceInBytes(usd_price);
-				if (price)
+				if (price && isFinite(price))
 					return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
 			}
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
@@ -531,7 +531,7 @@ function respond(from_address, text, response){
 				if (tokens.length == 3) {
 					let gb_amount = tokens[2];
 					let amount = Math.round(gb_amount * 1e9);
-					if (amount <= 0){
+					if (!isFinite(amount) || amount <= 0){
 						unlock();
 						return device.sendMessageToDevice(from_address, 'text', `Withdraw amount must be positive`);
 					}
