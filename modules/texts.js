@@ -54,10 +54,10 @@ exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
 	return `To limit number of smart voucher uses per device, send a message using the following format: [limit ${voucher} ${amount+1}](suggest-command:limit ${voucher} ${amount+1}). Current limit: ${amount}`;
 };
 
-exports.payToVoucher = (receiving_address, voucher, price, user_address) => {
-	if (!price)
-		throw Error("price missing");
-	return `Please pay ${(price/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${price})`;
+exports.payToVoucher = (receiving_address, voucher, amount, user_address) => {
+	if (!amount)
+		throw Error("amount missing");
+	return `Please pay ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${amount})`;
 };
 
 exports.vouchersHelp = () => {

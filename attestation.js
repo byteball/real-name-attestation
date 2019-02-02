@@ -490,10 +490,10 @@ function respond(from_address, text, response){
 			if (!voucherInfo)
 				return device.sendMessageToDevice(from_address, 'text', `invalid voucher: ${voucher_code}`);
 			if (tokens.length == 3) {
-				let usd_price = parseFloat(tokens[2]);
-				let price = conversion.getPriceInBytes(usd_price);
-				if (price && isFinite(price))
-					return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, price, userInfo.user_address));
+				let usd_amount = parseFloat(tokens[2]);
+				let amount = conversion.getPriceInBytes(usd_amount);
+				if (amount && isFinite(amount))
+					return device.sendMessageToDevice(from_address, 'text', texts.payToVoucher(voucherInfo.receiving_address, voucher_code, amount, userInfo.user_address));
 			}
 			return device.sendMessageToDevice(from_address, 'text', texts.depositVoucher(voucher_code));
 		}
