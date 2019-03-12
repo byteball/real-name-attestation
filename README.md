@@ -7,7 +7,7 @@ A bot that attests the user's passport or ID card data.
 * Run `npm install` to install node modules.
 * Download "GeoLite2 Country" [MaxMind DB](https://dev.maxmind.com/geoip/geoip2/geolite2/), unzip it and extract `GeoLite2-Country.mmdb` into parent folder.
 * Run `node attestation.js` first time to generate keys.
-* Configure `admin_email`, `from_email`, `salt` and `webPort` values in new conf.json file (desktopApp.getAppDataDir() folder). Read more about other configuration options [there](https://github.com/byteball/headless-byteball#customize).
+* Configure `admin_email`, `from_email`, `salt` and `webPort` values in new conf.json file (desktopApp.getAppDataDir() folder). Read more about other configuration options [there](https://github.com/byteball/headless-obyte#customize).
 * Run `node db_import.js` to import `db.sql` into the database and appling database migrations.
 * Send bytes to `== distribution address`, which is displayed in logs, it is for rewards and referral bonuses.
 * Setup Nginx on `webPort` that you set.
