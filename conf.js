@@ -11,7 +11,7 @@ exports.storage = 'sqlite';
 exports.socksHost = '127.0.0.1';
 exports.socksPort = 9050;
 
-exports.hub = 'byteball.org/bb';
+exports.hub = process.env.testnet ? 'obyte.org/bb-test' : 'obyte.org/bb';
 exports.deviceName = 'Real name attestation bot';
 exports.permanent_pairing_secret = '0000';
 exports.control_addresses = [''];
