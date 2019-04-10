@@ -92,9 +92,9 @@ function moveFundsToAttestorAddresses(){
 	db.query(
 		"SELECT DISTINCT receiving_address \n\
 		FROM receiving_addresses CROSS JOIN outputs ON receiving_address=address JOIN units USING(unit) \n\
-		WHERE is_stable=1 AND is_spent=0 AND asset IS NULL \n\
+		WHERE is_stable=1 AND is_spent=0 AND asset IS NULL AND receiving_address NOT IN(?) \n\
 		LIMIT ?",
-		[constants.MAX_AUTHORS_PER_UNIT],
+		[Object.keys(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
 		rows => {
 			if (rows.length === 0)
 				return;
