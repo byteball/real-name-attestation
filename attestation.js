@@ -94,7 +94,7 @@ function moveFundsToAttestorAddresses(){
 		FROM receiving_addresses CROSS JOIN outputs ON receiving_address=address JOIN units USING(unit) \n\
 		WHERE is_stable=1 AND is_spent=0 AND asset IS NULL AND receiving_address NOT IN(?) \n\
 		LIMIT ?",
-		[Object.keys(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
+		[Object.values(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
 		rows => {
 			if (rows.length === 0)
 				return;
@@ -381,7 +381,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB). Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!`);
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Obyte distribution fund to your smart voucher. Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!`);
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
@@ -551,7 +551,7 @@ function respond(from_address, text, response){
 			});
 			return;
 		}
-		if (text.length == 13) { // voucher
+		if (text.length == 13 && text !== 'attest non-US') { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
 			let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
