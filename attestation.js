@@ -94,7 +94,7 @@ function moveFundsToAttestorAddresses(){
 		FROM receiving_addresses CROSS JOIN outputs ON receiving_address=address JOIN units USING(unit) \n\
 		WHERE is_stable=1 AND is_spent=0 AND asset IS NULL AND receiving_address NOT IN(?) \n\
 		LIMIT ?",
-		[Object.keys(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
+		[Object.values(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
 		rows => {
 			if (rows.length === 0)
 				return;
