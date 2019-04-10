@@ -54,7 +54,7 @@ exports.priceInUSDforSmartID = 0.5;
 exports.contractRewardInUSD = 8;
 exports.referralRewardInUSD = 0;
 exports.contractReferralRewardInUSD = 10;
-exports.donationInUSD = 16;
+exports.donationInUSD = 8;
 exports.bRefundAttestationFee = true;
 
 exports.contractTerm = 1; // years
