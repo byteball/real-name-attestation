@@ -700,6 +700,10 @@ function respond(from_address, text, response){
 									response + ( attestation_unit ? texts.alreadyAttestedInUnit(attestation_unit) : texts.underWay() ) );
 							}
 							let data = JSON.parse(row.extracted_data);
+							if (!data) {
+								return device.sendMessageToDevice(from_address, 'text', 
+									response + "Bot doesn't have this data anymore, you will need to attest [again](command:again)." );
+							}
 							let cb_data;
 							if (userInfo.service_provider === 'smartid') {
 								cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
