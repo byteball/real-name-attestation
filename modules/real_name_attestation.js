@@ -162,7 +162,7 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 						() => {
 							// extracted_data is nulled in service_helper.cleanExtractedData()
 							let device = require('ocore/device.js');
-							let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
+							let explorer = (process.env.testnet ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
 							let text = (attestation_type === 'real name') ? "Now your real name is attested" : "Now you are attested as non-US citizen";
 							text += `, see the attestation unit: ${explorer}${unit}`;
 							if (src_profile){
