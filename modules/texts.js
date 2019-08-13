@@ -161,7 +161,7 @@ exports.alreadyAttested = (attestation_date) => {
 };
 
 exports.alreadyAttestedInUnit = (attestation_unit) => {
-	let explorer = (conf.hub == 'byteball.org/bb-test' ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
+	let explorer = (process.env.testnet ? 'https://testnetexplorer.obyte.org/#' : 'https://explorer.obyte.org/#');
 	return `You were already attested in ${explorer}${attestation_unit}`;
 };
 
