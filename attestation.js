@@ -100,10 +100,12 @@ function moveFundsToAttestorAddresses(){
 				return;
 			let arrAddresses = rows.map(row => row.receiving_address);
 			let headlessWallet = require('headless-obyte');
-			let timestampMod = Date.now()%3;
+			let timestampMod = Date.now() % 3;
+			let to_address = realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'smartid' : 'nonus')];
 			headlessWallet.sendMultiPayment({
 				asset: null,
-				to_address: realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'smartid' : 'nonus')],
+				to_address: to_address,
+				change_address: to_address, // not used anyway because of send_all
 				send_all: true,
 				paying_addresses: arrAddresses
 			}, (err, unit) => {
