@@ -148,6 +148,16 @@ app.post('*/cb', function(req, res) {
 	);
 });
 
+app.get('*/smartid', function(req, res) {
+	let query = req.query;
+	console.error('received request', query);
+	if (!query.state){
+		notifications.notifyAdmin("smartid redirect without state", JSON.stringify(query));
+		return res.send("no state");
+	}
+	return res.redirect(smartidApi.getLoginUrl(query.state));
+});
+
 app.get('*/done', handleSmartIdCallback);
 app.post('*/done', handleSmartIdCallback);
 	
