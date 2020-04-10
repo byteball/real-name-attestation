@@ -155,7 +155,23 @@ app.get('*/smartid', function(req, res) {
 		notifications.notifyAdmin("smartid redirect without state", JSON.stringify(query));
 		return res.send("no state");
 	}
-	return res.redirect(smartidApi.getLoginUrl(query.state));
+	db.query(
+		"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
+		[query.state], 
+		rows => {
+			if (rows.length === 0){
+				notifications.notifyAdmin("done state invalid", JSON.stringify(query));
+				return res.sendFile(__dirname+'/failed.html');
+			}
+			let row = rows[0];
+			if (row.scan_result !== null){
+				// when user refreshes
+				//notifications.notifyAdmin("duplicate done", JSON.stringify(query));
+				return res.sendFile(__dirname+'/done.html');
+			}
+			return res.redirect(smartidApi.getLoginUrl(query.state));
+		}
+	);
 });
 
 app.get('*/done', handleSmartIdCallback);
