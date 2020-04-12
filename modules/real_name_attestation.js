@@ -3,6 +3,7 @@
 const conf = require('ocore/conf');
 const objectHash = require('ocore/object_hash.js');
 const db = require('ocore/db');
+const constants = require('ocore/constants');
 const notifications = require('./notifications');
 const smartidApi = require('./smartid_api.js');
 const jumioApi = require('./jumio_api.js');
@@ -10,6 +11,7 @@ const countries = require("i18n-iso-countries");
 const moment = require('moment');
 
 var assocAttestorAddresses = {};
+var bJsonBased = (constants.version !== constants.versionWithoutTimestamp);
 
 
 function convertCountry3to2(country3){
@@ -38,15 +40,15 @@ function getAttestationPayloadAndSrcProfile(user_address, data, service_provider
 		cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
 	}
 	let profile = {
-		first_name: cb_data.idFirstName,
-		last_name: cb_data.idLastName,
-		dob: cb_data.idDob,
-		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : cb_data.idCountry,
-		us_state: cb_data.idUsState,
-		personal_code: cb_data.personalCode,
-		id_number: cb_data.idNumber,
-		id_type: cb_data.idType,
-		id_subtype: cb_data.idSubtype,
+		first_name: String(cb_data.idFirstName),
+		last_name: String(cb_data.idLastName),
+		dob: String(cb_data.idDob),
+		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : String(cb_data.idCountry),
+		us_state: String(cb_data.idUsState),
+		personal_code: String(cb_data.personalCode),
+		id_number: String(cb_data.idNumber),
+		id_type: String(cb_data.idType),
+		id_subtype: String(cb_data.idSubtype),
 		id_expiry: cb_data.idExpiry ? moment(cb_data.idExpiry).format('YYYY-MM-DD') : '',
 		id_issued_at: cb_data.idIssuedAt ? moment(cb_data.idIssuedAt).format('YYYY-MM-DD') : ''
 	};
@@ -84,11 +86,11 @@ function hideProfile(profile){
 	for (let field in profile){
 		let value = profile[field];
 		let blinding = composer.generateBlinding();
-		let hidden_value = objectHash.getBase64Hash([value, blinding]);
+		let hidden_value = objectHash.getBase64Hash([value, blinding], bJsonBased);
 		hidden_profile[field] = hidden_value;
 		src_profile[field] = [value, blinding];
 	}
-	let profile_hash = objectHash.getBase64Hash(hidden_profile);
+	let profile_hash = objectHash.getBase64Hash(hidden_profile, bJsonBased);
 	let user_id = getUserId(profile);
 	let public_profile = {
 		profile_hash: profile_hash,
@@ -109,7 +111,7 @@ function postAttestation(attestor_address, payload, onDone){
 	let objMessage = {
 		app: "attestation",
 		payload_location: "inline",
-		payload_hash: objectHash.getBase64Hash(payload),
+		payload_hash: objectHash.getBase64Hash(payload, bJsonBased),
 		payload: payload
 	};
 	
@@ -133,7 +135,7 @@ function postAttestation(attestor_address, payload, onDone){
 		let objTimestampMessage = {
 			app: "data_feed",
 			payload_location: "inline",
-			payload_hash: objectHash.getBase64Hash(datafeed),
+			payload_hash: objectHash.getBase64Hash(datafeed, bJsonBased),
 			payload: datafeed
 		};
 		params.messages.push(objTimestampMessage);
@@ -168,7 +170,7 @@ function postAndWriteAttestation(transaction_id, attestation_type, attestor_addr
 							if (src_profile){
 								let private_profile = {
 									unit: unit,
-									payload_hash: objectHash.getBase64Hash(attestation_payload),
+									payload_hash: objectHash.getBase64Hash(attestation_payload, bJsonBased),
 									src_profile: src_profile
 								};
 								let base64PrivateProfile = Buffer.from(JSON.stringify(private_profile)).toString('base64');

@@ -854,7 +854,11 @@ eventBus.once('headless_and_rates_ready', () => {
 						if (row.price > 0)
 							db.query(
 								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
-								[row.receiving_address, row.price, row.amount, row.unit]
+								[row.receiving_address, row.price, row.amount, row.unit],
+								function() {
+									// speed up testing
+									if (process.env.testnet) eventBus.emit('my_transactions_became_stable', [row.unit]);
+								}
 							);
 						else {
 							db.query(
@@ -885,7 +889,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			rows => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
-					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
+					//device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
 					if (row.service_provider === 'smartid') {
 						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}
