@@ -46,7 +46,7 @@ function getAttestationPayloadAndSrcProfile(user_address, data, service_provider
 		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : cb_data.idCountry,
 		us_state: cb_data.idUsState,
 		personal_code: cb_data.personalCode,
-		id_number: b_data.idNumber,
+		id_number: cb_data.idNumber,
 		id_type: cb_data.idType,
 		id_subtype: cb_data.idSubtype,
 		id_expiry: cb_data.idExpiry ? moment(cb_data.idExpiry).format('YYYY-MM-DD') : '',
