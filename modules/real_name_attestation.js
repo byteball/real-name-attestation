@@ -40,15 +40,15 @@ function getAttestationPayloadAndSrcProfile(user_address, data, service_provider
 		cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
 	}
 	let profile = {
-		first_name: String(cb_data.idFirstName),
-		last_name: String(cb_data.idLastName),
-		dob: String(cb_data.idDob),
-		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : String(cb_data.idCountry),
-		us_state: String(cb_data.idUsState),
-		personal_code: String(cb_data.personalCode),
-		id_number: String(cb_data.idNumber),
-		id_type: String(cb_data.idType),
-		id_subtype: String(cb_data.idSubtype),
+		first_name: cb_data.idFirstName,
+		last_name: cb_data.idLastName,
+		dob: cb_data.idDob,
+		country: String(cb_data.idCountry).length === 3 ? convertCountry3to2(cb_data.idCountry) : cb_data.idCountry,
+		us_state: cb_data.idUsState,
+		personal_code: cb_data.personalCode,
+		id_number: b_data.idNumber,
+		id_type: cb_data.idType,
+		id_subtype: cb_data.idSubtype,
 		id_expiry: cb_data.idExpiry ? moment(cb_data.idExpiry).format('YYYY-MM-DD') : '',
 		id_issued_at: cb_data.idIssuedAt ? moment(cb_data.idIssuedAt).format('YYYY-MM-DD') : ''
 	};
