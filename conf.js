@@ -57,6 +57,7 @@ exports.referralRewardInUSD = 0;
 exports.contractReferralRewardInUSD = 10;
 exports.donationInUSD = 8;
 exports.bRefundAttestationFee = true;
+exports.bAcceptUnconfirmedPayments = process.env.testnet;
 
 exports.contractTerm = 1; // years
 exports.contractUnclaimedTerm = 2; // years

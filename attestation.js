@@ -857,7 +857,7 @@ eventBus.once('headless_and_rates_ready', () => {
 								[row.receiving_address, row.price, row.amount, row.unit],
 								function() {
 									// speed up testing
-									if (process.env.testnet) eventBus.emit('my_transactions_became_stable', [row.unit]);
+									if (conf.bAcceptUnconfirmedPayments) eventBus.emit('my_transactions_became_stable', [row.unit]);
 								}
 							);
 						else {
