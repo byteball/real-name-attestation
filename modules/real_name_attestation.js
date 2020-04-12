@@ -111,7 +111,6 @@ function postAttestation(attestor_address, payload, onDone){
 	let objMessage = {
 		app: "attestation",
 		payload_location: "inline",
-		payload_hash: objectHash.getBase64Hash(payload, bJsonBased && attestor_address !== assocAttestorAddresses['nonus']),
 		payload: payload
 	};
 	
@@ -135,7 +134,6 @@ function postAttestation(attestor_address, payload, onDone){
 		let objTimestampMessage = {
 			app: "data_feed",
 			payload_location: "inline",
-			payload_hash: objectHash.getBase64Hash(datafeed),
 			payload: datafeed
 		};
 		params.messages.push(objTimestampMessage);
