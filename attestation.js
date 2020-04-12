@@ -148,6 +148,32 @@ app.post('*/cb', function(req, res) {
 	);
 });
 
+app.get('*/smartid', function(req, res) {
+	let query = req.query;
+	console.error('received request', query);
+	if (!query.state){
+		notifications.notifyAdmin("smartid redirect without state", JSON.stringify(query));
+		return res.send("no state");
+	}
+	db.query(
+		"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
+		[query.state], 
+		rows => {
+			if (rows.length === 0){
+				notifications.notifyAdmin("done state invalid", JSON.stringify(query));
+				return res.sendFile(__dirname+'/failed.html');
+			}
+			let row = rows[0];
+			if (row.scan_result !== null){
+				// when user refreshes
+				//notifications.notifyAdmin("duplicate done", JSON.stringify(query));
+				return res.sendFile(__dirname+'/done.html');
+			}
+			return res.redirect(smartidApi.getLoginUrl(query.state));
+		}
+	);
+});
+
 app.get('*/done', handleSmartIdCallback);
 app.post('*/done', handleSmartIdCallback);
 	
@@ -828,7 +854,11 @@ eventBus.once('headless_and_rates_ready', () => {
 						if (row.price > 0)
 							db.query(
 								"INSERT INTO transactions (receiving_address, price, received_amount, payment_unit) VALUES (?,?, ?,?)", 
-								[row.receiving_address, row.price, row.amount, row.unit]
+								[row.receiving_address, row.price, row.amount, row.unit],
+								function() {
+									// speed up testing
+									if (conf.bAcceptUnconfirmedPayments) eventBus.emit('my_transactions_became_stable', [row.unit]);
+								}
 							);
 						else {
 							db.query(
@@ -859,7 +889,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			rows => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
-					device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
+					if (!conf.bAcceptUnconfirmedPayments) device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
 					if (row.service_provider === 'smartid') {
 						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}

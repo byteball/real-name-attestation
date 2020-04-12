@@ -48,6 +48,7 @@ exports.apiSecret = '';
 exports.apiSmartIdToken = '';
 exports.apiSmartIdSecret = '';
 exports.apiSmartIdCallback = 'https://oid.one/done';
+exports.apiSmartIdRedirect = 'https://oid.one/smartid';
 
 exports.priceInUSD = 8;
 exports.priceInUSDforSmartID = 0.5;
@@ -56,6 +57,7 @@ exports.referralRewardInUSD = 0;
 exports.contractReferralRewardInUSD = 10;
 exports.donationInUSD = 8;
 exports.bRefundAttestationFee = true;
+exports.bAcceptUnconfirmedPayments = process.env.testnet;
 
 exports.contractTerm = 1; // years
 exports.contractUnclaimedTerm = 2; // years

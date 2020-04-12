@@ -1,12 +1,14 @@
 /*jslint node: true */
 'use strict';
 const jumioApi = require('./jumio_api.js');
-const smartidApi = require('./smartid_api.js');
 const db = require('ocore/db');
 const conf = require('ocore/conf.js');
 const objectHash = require('ocore/object_hash.js');
 
 function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
+	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback || !conf.apiSmartIdRedirect) {
+		throw Error("smartid credentials missing");
+	}
 	const mutex = require('ocore/mutex.js');
 	const device = require('ocore/device.js');
 	mutex.lock(['tx-'+transaction_id], function(unlock){
@@ -26,7 +28,8 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 					unlock();
 					if (onDone)
 						onDone();
-					return device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+smartidApi.getLoginUrl(callbackReference));
+					let redirect_url = conf.apiSmartIdRedirect +'?state='+ callbackReference;
+					return device.sendMessageToDevice(device_address, 'text', "Please click this link to start authentication: "+redirect_url);
 				}
 			);
 		});
