@@ -889,7 +889,7 @@ eventBus.once('headless_and_rates_ready', () => {
 			rows => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
-					//device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
+					if (!conf.bAcceptUnconfirmedPayments) device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
 					if (row.service_provider === 'smartid') {
 						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}
