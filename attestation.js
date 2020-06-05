@@ -582,7 +582,7 @@ function respond(from_address, text, response){
 		if (text.length == 13 && text !== 'attest non-US') { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+			let has_attestation = await hasSuccessfulAttestation(from_address, userInfo.user_address);
 			if (!has_attestation) { // never been attested on this device or user_address
 				mutex.lock(['voucher-'+text], async (unlock) => {
 					let voucherInfo = await voucher.getInfo(text);

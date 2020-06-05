@@ -8,7 +8,7 @@ function getLoginUrl(callbackReference) {
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback || !conf.apiSmartIdRedirect) {
 		throw Error("smartid credentials missing");
 	}
-	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(callbackReference);
+	return 'https://id.eideasy.com/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(callbackReference);
 }
 
 function getAccessToken(grantCode, onDone){
@@ -27,7 +27,7 @@ function getAccessToken(grantCode, onDone){
 		redirect_uri: conf.apiSmartIdCallback
 	};
 	request({
-		url: "https://id.smartid.ee/oauth/access_token", 
+		url: "https://id.eideasy.com/oauth/access_token", 
 		headers: headers, 
 		method: 'POST', 
 		form: form_data
@@ -52,7 +52,7 @@ function getUserData(access_token, onDone){
 		"User-Agent": "Obyte attestation/1.0"
 	};
 	request({
-		url: "https://id.smartid.ee/api/v2/user_data?access_token=" + access_token, 
+		url: "https://id.eideasy.com/api/v2/user_data?access_token=" + access_token, 
 		headers: headers, 
 		method: 'GET'
 	}, function (error, response, body){

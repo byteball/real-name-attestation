@@ -44,7 +44,7 @@ exports.MIN_AVAILABLE_WITNESSINGS = 100;
 exports.apiToken = '';
 exports.apiSecret = '';
 
-// id.smartid.ee api credentials 
+// id.eideasy.com api credentials 
 exports.apiSmartIdToken = '';
 exports.apiSmartIdSecret = '';
 exports.apiSmartIdCallback = 'https://oid.one/done';
