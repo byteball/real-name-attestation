@@ -7,7 +7,7 @@ const objectHash = require('ocore/object_hash.js');
 
 function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback || !conf.apiSmartIdRedirect) {
-		throw Error("smartid credentials missing");
+		throw Error("eID Easy credentials missing");
 	}
 	const mutex = require('ocore/mutex.js');
 	const device = require('ocore/device.js');
