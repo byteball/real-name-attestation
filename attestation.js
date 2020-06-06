@@ -152,7 +152,7 @@ app.get('*/smartid', function(req, res) {
 	let query = req.query;
 	console.error('received request', query);
 	if (!query.state){
-		notifications.notifyAdmin("smartid redirect without state", JSON.stringify(query));
+		notifications.notifyAdmin("eID Easy redirect without state", JSON.stringify(query));
 		return res.send("no state");
 	}
 	db.query(
@@ -582,7 +582,7 @@ function respond(from_address, text, response){
 		if (text.length == 13 && text !== 'attest non-US') { // voucher
 			if (!userInfo.user_address)
 				return device.sendMessageToDevice(from_address, 'text', texts.insertMyAddress());
-			let has_attestation = await hasSuccessfulOrOngoingAttestation(from_address, userInfo.user_address);
+			let has_attestation = await hasSuccessfulAttestation(from_address, userInfo.user_address);
 			if (!has_attestation) { // never been attested on this device or user_address
 				mutex.lock(['voucher-'+text], async (unlock) => {
 					let voucherInfo = await voucher.getInfo(text);
@@ -941,7 +941,7 @@ eventBus.once('headless_wallet_ready', () => {
 		
 		let headlessWallet = require('headless-obyte');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
-			console.log('== jumio attestation address: '+address1);
+			console.log('== Jumio Netverify attestation address: '+address1);
 			realNameAttestation.assocAttestorAddresses['jumio'] = address1;
 			headlessWallet.issueOrSelectAddressByIndex(0, 1, address2 => {
 				console.log('== non-US attestation address: '+address2);
@@ -950,7 +950,7 @@ eventBus.once('headless_wallet_ready', () => {
 					console.log('== distribution address: '+address3);
 					reward.distribution_address = address3;
 					headlessWallet.issueOrSelectAddressByIndex(0, 3, address4 => {
-						console.log('== smartid attestation address: '+address4);
+						console.log('== eID Easy attestation address: '+address4);
 						realNameAttestation.assocAttestorAddresses['smartid'] = address4;
 
 						server.listen(conf.webPort);

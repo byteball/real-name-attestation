@@ -6,14 +6,14 @@ const notifications = require('./notifications.js');
 
 function getLoginUrl(callbackReference) {
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback || !conf.apiSmartIdRedirect) {
-		throw Error("smartid credentials missing");
+		throw Error("eID Easy credentials missing");
 	}
-	return 'https://id.smartid.ee/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(callbackReference);
+	return 'https://id.eideasy.com/oauth/authorize?client_id='+ encodeURIComponent(conf.apiSmartIdToken) +'&redirect_uri=' + encodeURIComponent(conf.apiSmartIdCallback) + '&response_type=code&lang=en&state='+ encodeURIComponent(callbackReference);
 }
 
 function getAccessToken(grantCode, onDone){
 	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret || !conf.apiSmartIdCallback || !conf.apiSmartIdRedirect) {
-		throw Error("smartid credentials missing");
+		throw Error("eID Easy credentials missing");
 	}
 	let headers = {
 		"Content-Type": "application/json",
@@ -27,7 +27,7 @@ function getAccessToken(grantCode, onDone){
 		redirect_uri: conf.apiSmartIdCallback
 	};
 	request({
-		url: "https://id.smartid.ee/oauth/access_token", 
+		url: "https://id.eideasy.com/oauth/access_token", 
 		headers: headers, 
 		method: 'POST', 
 		form: form_data
@@ -35,8 +35,8 @@ function getAccessToken(grantCode, onDone){
 		if (typeof body === 'string' && body)
 			body = JSON.parse(body);
 		if (error || response.statusCode !== 200){
-			notifications.notifyAdmin("getAccessToken smartid failed", error+", status="+(response ? response.statusCode : '?'));
-			return onDone("getAccessToken smartid failed: "+error, body);
+			notifications.notifyAdmin("getAccessToken eID Easy failed", error+", status="+(response ? response.statusCode : '?'));
+			return onDone("getAccessToken eID Easy failed: "+error, body);
 		}
 		console.log("response: ", body);
 		onDone(null, body);
@@ -52,15 +52,15 @@ function getUserData(access_token, onDone){
 		"User-Agent": "Obyte attestation/1.0"
 	};
 	request({
-		url: "https://id.smartid.ee/api/v2/user_data?access_token=" + access_token, 
+		url: "https://id.eideasy.com/api/v2/user_data?access_token=" + access_token, 
 		headers: headers, 
 		method: 'GET'
 	}, function (error, response, body){
 		if (typeof body === 'string' && body)
 			body = JSON.parse(body);
 		if (error || response.statusCode !== 200){
-			notifications.notifyAdmin("getUserData smartid failed", error+", status="+(response ? response.statusCode : '?'));
-			return onDone("getUserData smartid failed: "+error, body);
+			notifications.notifyAdmin("getUserData eID Easy failed", error+", status="+(response ? response.statusCode : '?'));
+			return onDone("getUserData eID Easy failed: "+error, body);
 		}
 		console.log("response: ", body);
 		onDone(null, body);
