@@ -83,7 +83,7 @@ exports.goingToAttest = (user_address) => {
 
 exports.welcomeProviders = (service_provider) => {
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
-	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
+	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
 	let jumioPrice = conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2});
 	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2});
 	return `Please select an attestation service provider:
@@ -91,7 +91,7 @@ exports.welcomeProviders = (service_provider) => {
 [Jumio Netverify](command:jumio) ${jumioSelected}
 Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver license and it costs $${jumioPrice} per attempt.
 
-[eID Easy](command:smartid) ${smartidSelected}
+[eID Easy](command:eideasy) ${smartidSelected}
 eID Easy is available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia. You can use ID-card, Mobile-ID, Smart-ID and it costs $${smartidPrice} per attempt.`;
 }
 
@@ -109,10 +109,10 @@ exports.selectedOption = () => {
 /*
 exports.selectProvider = (service_provider) => {
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
-	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
+	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
 	return `Please select an attestation service provider:
 	* [Jumio Netverify](command:jumio) ${jumioSelected}
-	* [eID Easy](command:smartid) ${smartidSelected}`;
+	* [eID Easy](command:eideasy) ${smartidSelected}`;
 };
 
 exports.orPay = () => {
@@ -122,10 +122,10 @@ exports.orPay = () => {
 
 function displayProvider(service_provider){
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
-	let smartidSelected = service_provider === 'smartid' ? exports.selectedOption() : '';
+	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
 	return `Currently selected attestation service provider:
 	* [Jumio Netverify](command:jumio) ${jumioSelected}
-	* [eID Easy](command:smartid) ${smartidSelected}`;
+	* [eID Easy](command:eideasy) ${smartidSelected}`;
 }
 
 exports.pleasePayOrProvider = (receiving_address, price, user_address, service_provider, objDiscountedPriceInUSD, have_attestation) => {

@@ -154,3 +154,8 @@ CREATE TABLE IF NOT EXISTS voucher_transactions (
 	FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
 	FOREIGN KEY (unit) REFERENCES units(unit) ON DELETE CASCADE
 );
+
+/*
+UPDATE users SET service_provider = "eideasy" WHERE service_provider = "smartid";
+UPDATE receiving_addresses SET service_provider = "eideasy" WHERE service_provider = "smartid";
+*/

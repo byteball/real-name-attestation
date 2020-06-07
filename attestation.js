@@ -101,7 +101,7 @@ function moveFundsToAttestorAddresses(){
 			let arrAddresses = rows.map(row => row.receiving_address);
 			let headlessWallet = require('headless-obyte');
 			let timestampMod = Date.now() % 3;
-			let to_address = realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'smartid' : 'nonus')];
+			let to_address = realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'eideasy' : 'nonus')];
 			headlessWallet.sendMultiPayment({
 				asset: null,
 				to_address: to_address,
@@ -299,7 +299,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 				}
 				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], async () => {
 					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.service_provider);
-					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses[row.service_provider === 'smartid' ? 'smartid' : 'jumio'], attestation, src_profile);
+					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses[row.service_provider === 'eideasy' ? 'eideasy' : 'jumio'], attestation, src_profile);
 
 					setTimeout(() => {
 						if (bNonUS){
@@ -383,7 +383,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 											JOIN attestations USING (unit, message_index)
 											WHERE address=? AND attestor_address IN (?)
 											ORDER BY attestations.rowid DESC LIMIT 1`,
-											[voucherInfo.user_address, [realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['smartid']]],
+											[voucherInfo.user_address, [realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['eideasy']]],
 											function(rows) {
 												if (!rows.length) {
 													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
@@ -394,7 +394,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 													throw Error(`no user_id for user_address ${voucherInfo.user_address}`);
 												
 												let amountUSD = conf.referralRewardInUSD+conf.contractReferralRewardInUSD;
-												if (row.service_provider === 'smartid') {
+												if (row.service_provider === 'eideasy') {
 													amountUSD += conf.priceInUSDforSmartID;
 												}
 												else {
@@ -431,7 +431,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 async function getPriceInUSD(user_address, service_provider){
 	let objDiscount = await discounts.getDiscount(user_address);
 	let discountPrice = conf.priceInUSD;
-	if (service_provider === 'smartid') {
+	if (service_provider === 'eideasy') {
 		discountPrice = conf.priceInUSDforSmartID;
 	}
 	discountPrice *= 1-objDiscount.discount/100;
@@ -663,7 +663,7 @@ function respond(from_address, text, response){
 										connection.release();
 										unlock();
 
-										if (userInfo.service_provider === 'smartid') {
+										if (userInfo.service_provider === 'eideasy') {
 											serviceHelper.initSmartIdLogin(transaction_id, from_address, userInfo.user_address);
 										}
 										else {
@@ -685,12 +685,12 @@ function respond(from_address, text, response){
 			if (user_address_response)
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
 			
-			if (text === 'jumio' || text === 'smartid'){
+			if (text === 'jumio' || text === 'eideasy'){
 				userInfo.service_provider = text;
 				db.query("UPDATE users SET service_provider=? WHERE device_address=? AND user_address=?;", 
 					[userInfo.service_provider, from_address, userInfo.user_address]);
 				
-				if (userInfo.service_provider === "smartid")
+				if (userInfo.service_provider === "eideasy")
 					response += texts.providerSmartID() + "\n\n";
 				else
 					response += texts.providerJumio() + "\n\n";
@@ -733,7 +733,7 @@ function respond(from_address, text, response){
 									response + "Bot doesn't have this data anymore, you will need to attest [again](command:again)." );
 							}
 							let cb_data;
-							if (userInfo.service_provider === 'smartid') {
+							if (userInfo.service_provider === 'eideasy') {
 								cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
 							}
 							else {
@@ -890,7 +890,7 @@ eventBus.once('headless_and_rates_ready', () => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
 					if (!conf.bAcceptUnconfirmedPayments) device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
-					if (row.service_provider === 'smartid') {
+					if (row.service_provider === 'eideasy') {
 						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}
 					else {
@@ -951,7 +951,7 @@ eventBus.once('headless_wallet_ready', () => {
 					reward.distribution_address = address3;
 					headlessWallet.issueOrSelectAddressByIndex(0, 3, address4 => {
 						console.log('== eID Easy attestation address: '+address4);
-						realNameAttestation.assocAttestorAddresses['smartid'] = address4;
+						realNameAttestation.assocAttestorAddresses['eideasy'] = address4;
 
 						server.listen(conf.webPort);
 						
@@ -965,7 +965,7 @@ eventBus.once('headless_wallet_ready', () => {
 						
 						const consolidation = require('headless-obyte/consolidation.js');
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
-						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['smartid'], headlessWallet.signer, 100, 3600*1000);
+						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['eideasy'], headlessWallet.signer, 100, 3600*1000);
 						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);
 					});
 				});

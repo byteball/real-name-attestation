@@ -136,7 +136,7 @@ function findReferrer(payment_unit, handleReferrer){
 			JOIN transactions USING(transaction_id) \n\
 			JOIN receiving_addresses USING(receiving_address) \n\
 			WHERE address IN("+arrAddresses.map(db.escape).join(', ')+") AND +attestor_address IN (?) AND transactions.payment_unit!=?", 
-			[[realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['smartid']], payment_unit],
+			[[realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['eideasy']], payment_unit],
 			rows => {
 				if (rows.length === 0){
 					console.log("no referrers for payment unit "+payment_unit);

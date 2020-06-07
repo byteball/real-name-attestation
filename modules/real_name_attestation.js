@@ -33,7 +33,7 @@ function getUserId(profile){
 
 function getAttestationPayloadAndSrcProfile(user_address, data, service_provider){
 	let cb_data;
-	if (service_provider === 'smartid') {
+	if (service_provider === 'eideasy') {
 		cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
 	}
 	else {
@@ -196,7 +196,7 @@ function retryPostingAttestations(){
 				let attestation, src_profile;
 				if (row.attestation_type === 'real name') {
 					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.service_provider);
-					postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.service_provider === 'smartid' ? 'smartid' : 'jumio'], attestation, src_profile);
+					postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.service_provider === 'eideasy' ? 'eideasy' : 'jumio'], attestation, src_profile);
 				}
 				else {
 					attestation = getNonUSAttestationPayload(row.user_address);
