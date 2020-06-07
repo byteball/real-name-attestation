@@ -1,7 +1,7 @@
 {
   "name": "real-name-attestation",
   "version": "1.0.0",
-  "description": "A bot for attestation of real names through Jumio and smartid",
+  "description": "A bot for attestation of real names through Jumio and eID Easy",
   "main": "attestation.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -19,7 +19,7 @@ function initSmartIdLogin(transaction_id, device_address, user_address, onDone){
 					onDone();
 				return;
 			}
-			let scanReference = transaction_id+'_smartid';
+			let scanReference = transaction_id+'_eideasy';
 			let callbackReference = objectHash.getHexHash([transaction_id, user_address, conf.salt]);
 			db.query(
 				"UPDATE transactions SET scanReference=?, jumioIdScanReference=? WHERE transaction_id=?", 
@@ -78,7 +78,7 @@ function retryInitScans(){
 		WHERE jumioIdScanReference IS NULL AND confirmation_date IS NOT NULL",
 		rows => {
 			rows.forEach(row => {
-				if (row.service_provider === 'smartid') {
+				if (row.service_provider === 'eideasy') {
 					initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 				}
 				else {
