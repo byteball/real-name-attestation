@@ -6,6 +6,7 @@ const db = require('ocore/db');
 const constants = require('ocore/constants');
 const notifications = require('./notifications');
 const smartidApi = require('./smartid_api.js');
+const veriffApi = require('./veriff_api.js');
 const jumioApi = require('./jumio_api.js');
 const countries = require("i18n-iso-countries");
 const moment = require('moment');
@@ -33,11 +34,14 @@ function getUserId(profile){
 
 function getAttestationPayloadAndSrcProfile(user_address, data, service_provider){
 	let cb_data;
-	if (service_provider === 'eideasy') {
-		cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
-	}
-	else {
+	if (service_provider === 'jumio') {
 		cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+	}
+	else if (service_provider === 'veriff') {
+		cb_data = data.status ? veriffApi.convertRestResponseToCallbackFormat(data) : data;
+	}
+	else if (service_provider === 'eideasy') {
+		cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
 	}
 	let profile = {
 		first_name: cb_data.idFirstName,
@@ -196,7 +200,10 @@ function retryPostingAttestations(){
 				let attestation, src_profile;
 				if (row.attestation_type === 'real name') {
 					[attestation, src_profile] = getAttestationPayloadAndSrcProfile(row.user_address, JSON.parse(row.extracted_data), row.service_provider);
-					postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.service_provider === 'eideasy' ? 'eideasy' : 'jumio'], attestation, src_profile);
+					if (!assocAttestorAddresses[row.service_provider])
+						notifications.notifyAdmin("missing service provider, retry", "transaction id: "+row.transaction_id);
+					else
+						postAndWriteAttestation(row.transaction_id, row.attestation_type, assocAttestorAddresses[row.service_provider], attestation, src_profile);
 				}
 				else {
 					attestation = getNonUSAttestationPayload(row.user_address);

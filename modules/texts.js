@@ -83,49 +83,58 @@ exports.goingToAttest = (user_address) => {
 
 exports.welcomeProviders = (service_provider) => {
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
+	let veriffSelected = service_provider === 'veriff' ? exports.selectedOption() : '';
 	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
 	let jumioPrice = conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2});
+	let veriffPrice = conf.priceInUSDforVeriff.toLocaleString([], {minimumFractionDigits: 2});
 	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2});
-	return `Please select an attestation service provider:
+	let display_providers = 'Please select an attestation service provider:';
 
-[Jumio Netverify](command:jumio) ${jumioSelected}
-Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver license and it costs $${jumioPrice} per attempt.
+	display_providers += (!conf.apiToken || !conf.apiSecret) ? '' : `\n\n[Jumio Netverify](command:jumio) ${jumioSelected}
+Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver's license and it costs $${jumioPrice} per attempt.`;
 
-[eID Easy](command:eideasy) ${smartidSelected}
+	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n\n[Veriff](command:jumio) ${veriffSelected}
+Veriff is available worldwide. It uses your webcam to take photos of your passport, ID card, residence permit, or driver's license and it costs $${veriffPrice} per attempt.`
+
+	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n\n[eID Easy](command:eideasy) ${smartidSelected}
 eID Easy is available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia. You can use ID-card, Mobile-ID, Smart-ID and it costs $${smartidPrice} per attempt.`;
+
+	return display_providers;
 }
 
 exports.providerJumio = () => {
-	return "After payment, you will be redirected to Jumio website for your document (ID card, driver's licence, passport) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
+	if (!conf.apiToken || !conf.apiSecret) return 'jumio credentials missing';
+
+	return "After payment, you will be redirected to Jumio website for your document (passport, ID card, driver's licence) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
+}
+
+exports.providerVeriff = () => {
+	if (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) return 'veriff credentials missing';
+
+	return "After payment, you will be redirected to Veriff website for your document (passport, ID card, residence permit, driver's licence) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSDforVeriff.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
 
 exports.providerSmartID = () => {
+	if (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) return 'eID Easy credentials missing';
+
 	return "After payment, you will be redirected to eID Easy website for authentication. You need to authenticate with ID-card, Mobile-ID or Smart-ID (available for residents of Estonia, Latvia, Lithuania and e-residents of Estonia).\n\nThe price of attestation is $"+conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
 
 exports.selectedOption = () => {
 	return `(selected)`;
 };
-/*
-exports.selectProvider = (service_provider) => {
-	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
-	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
-	return `Please select an attestation service provider:
-	* [Jumio Netverify](command:jumio) ${jumioSelected}
-	* [eID Easy](command:eideasy) ${smartidSelected}`;
-};
-
-exports.orPay = () => {
-	return `or pay for the attestation.`;
-};
-*/
 
 function displayProvider(service_provider){
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
+	let veriffSelected = service_provider === 'veriff' ? exports.selectedOption() : '';
 	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
-	return `Currently selected attestation service provider:
-	* [Jumio Netverify](command:jumio) ${jumioSelected}
-	* [eID Easy](command:eideasy) ${smartidSelected}`;
+	let display_providers = 'Currently selected attestation service provider';
+
+	display_providers += (!conf.apiToken || !conf.apiSecret) ? '' : `\n* [Jumio Netverify](command:jumio) ${jumioSelected}`;
+	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n* [Veriff](command:veriff) ${veriffSelected}`;
+	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n* [eID Easy](command:eideasy) ${smartidSelected}`;
+
+	return display_providers;
 }
 
 exports.pleasePayOrProvider = (receiving_address, price, user_address, service_provider, objDiscountedPriceInUSD, have_attestation) => {

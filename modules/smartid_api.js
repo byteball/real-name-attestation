@@ -70,7 +70,7 @@ function getUserData(access_token, onDone){
 function convertRestResponseToCallbackFormat(body){
 	let data = {
 		idScanStatus: (body.status && body.status === 'OK') ? 'SUCCESS' : 'ERROR',
-		verificationStatus: (body.status && body.status === 'OK') ? 'APPROVED_VERIFIED' : 'ERROR',
+		verificationStatus: (body.error || body.error_description) ? body.error +': '+ body.error_description : 'APPROVED_VERIFIED',
 		idFirstName: body.firstname ? String(body.firstname).toUpperCase() : '',
 		idLastName: body.lastname ? String(body.lastname).toUpperCase() : '',
 		idDob: body.birth_date ? body.birth_date : '',
