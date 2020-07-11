@@ -67,6 +67,17 @@ function getUserData(access_token, onDone){
 	});
 }
 
+function handleData(transaction_id, body, handleAttestation){
+	let data = body.status ? convertRestResponseToCallbackFormat(body) : body;
+	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
+	let error = !scan_result ? data.verificationStatus : '';
+	if (!error && (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry)) {
+		scan_result = 0;
+		error = 'some required data missing';
+	}
+	handleAttestation(transaction_id, body, data, scan_result, error);
+}
+
 function convertRestResponseToCallbackFormat(body){
 	let data = {
 		idScanStatus: (body.status && body.status === 'OK') ? 'SUCCESS' : 'ERROR',
@@ -91,5 +102,6 @@ function convertRestResponseToCallbackFormat(body){
 exports.getLoginUrl = getLoginUrl;
 exports.getAccessToken = getAccessToken;
 exports.getUserData = getUserData;
+exports.handleData = handleData;
 exports.convertRestResponseToCallbackFormat = convertRestResponseToCallbackFormat;
 

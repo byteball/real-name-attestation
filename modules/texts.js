@@ -93,7 +93,7 @@ exports.welcomeProviders = (service_provider) => {
 	display_providers += (!conf.apiToken || !conf.apiSecret) ? '' : `\n\n[Jumio Netverify](command:jumio) ${jumioSelected}
 Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver's license and it costs $${jumioPrice} per attempt.`;
 
-	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n\n[Veriff](command:jumio) ${veriffSelected}
+	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n\n[Veriff](command:veriff) ${veriffSelected}
 Veriff is available worldwide. It uses your webcam to take photos of your passport, ID card, residence permit, or driver's license and it costs $${veriffPrice} per attempt.`
 
 	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n\n[eID Easy](command:eideasy) ${smartidSelected}

@@ -63,7 +63,7 @@ function initAndWriteVeriffScan(transaction_id, device_address, user_address, on
 						unlock();
 						if (onDone)
 							onDone();
-						return device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification within 30 minutes after clicking the link, have your document ready.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Veriff will take some time to process the images, usually minutes but occasionally hours. We'll message you only when the final outcome is known.");
+						return device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification less than 7 days.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Veriff will take some time to process the images, it can take couple hours. We'll message you only when the final outcome is known.");
 					}
 				);
 			});
@@ -127,30 +127,6 @@ function retryInitScans(){
 	);
 }
 
-function pollJumioScanData(handleData){
-	console.log('pollJumioScanData');
-	db.query(
-		"SELECT jumioIdScanReference, transaction_id \n\
-		FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
-		WHERE service_provider = 'jumio' AND scan_result IS NULL AND jumioIdScanReference IS NOT NULL", 
-		rows => {
-			rows.forEach(row => {
-				jumioApi.retrieveScanData(row.jumioIdScanReference, body => {
-					if (!body)
-						return;
-					/*if (body === 'PENDING' && !row.scan_complete){
-						db.query("UPDATE transactions SET scan_complete=1 WHERE transaction_id=?", [row.transaction_id]);
-						const device = require('ocore/device.js');
-						device.sendMessageToDevice(row.device_address, 'text', "Please wait while Jumio verifies the images.  We'll let you know as soon as the outcome is known.");
-						return;
-					}*/
-					handleData(row.transaction_id, body);
-				});
-			});
-		}
-	);
-}
-
 function cleanExtractedData() {
 	db.query("UPDATE transactions SET extracted_data = NULL WHERE transaction_id IN (SELECT transaction_id FROM attestation_units JOIN transactions USING(transaction_id) WHERE extracted_data IS NOT NULL AND attestation_date IS NOT NULL AND attestation_date < "+ db.addTime('-7 day') + ");");
 }
@@ -159,6 +135,5 @@ exports.initSmartIdLogin = initSmartIdLogin;
 exports.initAndWriteVeriffScan = initAndWriteVeriffScan;
 exports.initAndWriteJumioScan = initAndWriteJumioScan;
 exports.retryInitScans = retryInitScans;
-exports.pollJumioScanData = pollJumioScanData;
 exports.cleanExtractedData = cleanExtractedData;
 

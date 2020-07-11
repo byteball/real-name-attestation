@@ -144,7 +144,7 @@ app.post('*/cb', function(req, res) {
 				notifications.notifyAdmin("duplicate cb", JSON.stringify(body));
 				return res.send(JSON.stringify({result: 'error', error: "duplicate cb"}));
 			}
-			handleJumioData(row.transaction_id, body);
+			jumioApi.handleData(row.transaction_id, body, handleAttestation);
 			res.send('ok');
 		}
 	);
@@ -184,9 +184,9 @@ function handleVeriffCallback(req, res) {
 		return res.send("veriff credentials missing");
 	}
 	let body = req.body;
-	//console.error(req.headers, body, veriffApi.generateSignature(body), req.header('X-SIGNATURE'));
+	//console.error(req.header('X-AUTH-CLIENT'), conf.apiVeriffPublicKey, req.header('X-SIGNATURE'), veriffApi.generateSignature(body));
 	if (body && body.verification && body.verification.id) {
-		if (veriffApi.generateSignature(body) === req.header('X-SIGNATURE')) {
+		if (req.header('X-AUTH-CLIENT') === conf.apiVeriffPublicKey && req.header('X-SIGNATURE') === veriffApi.generateSignature(body)) {
 			db.query(
 				"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
 				[body.verification.id], 
@@ -197,7 +197,7 @@ function handleVeriffCallback(req, res) {
 							notifications.notifyAdmin("duplicate verification", JSON.stringify(body));
 						}
 						else
-							handleVeriffData(row.transaction_id, body);
+							veriffApi.handleData(row.transaction_id, body, handleAttestation);
 					}
 					else
 						notifications.notifyAdmin("veriff scan not found", JSON.stringify(body));
@@ -205,7 +205,7 @@ function handleVeriffCallback(req, res) {
 			);
 		}
 		else
-			notifications.notifyAdmin("veriff signature invalid", JSON.stringify([req.headers, body, veriffApi.generateSignature(body), req.header('X-SIGNATURE')]));
+			notifications.notifyAdmin("veriff signature invalid", JSON.stringify([req.header('X-AUTH-CLIENT'), conf.apiVeriffPublicKey, req.header('X-SIGNATURE'), veriffApi.generateSignature(body)]));
 	}
 	return res.sendFile(__dirname+'/waiting.html');
 }
@@ -243,7 +243,7 @@ function handleSmartIdCallback(req, res) {
 					smartidApi.getUserData(auth.access_token, function(err, body) {
 						if (body) {
 							body.clientIp = req.ip; // get user ip from callback URL
-							handleSmartIdData(row.transaction_id, body);
+							smartidApi.handleData(row.transaction_id, body, handleAttestation);
 						}
 						if (err) {
 							console.error('getUserData', err, body);
@@ -272,52 +272,6 @@ function getCountryByIp(ip){
 		return 'UNKNOWN';
 	}
 	return ipCountry;
-}
-
-function handleJumioData(transaction_id, body){
-	let data = body.transaction ? jumioApi.convertRestResponseToCallbackFormat(body) : body;
-	if (typeof data.identityVerification === 'string') // contrary to docs, it is a string, not an object
-		data.identityVerification = JSON.parse(data.identityVerification);
-	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
-	let error = scan_result ? '' : data.verificationStatus;
-	let bHasLatNames = (scan_result && data.idFirstName && data.idLastName && data.idFirstName !== 'N/A' && data.idLastName !== 'N/A');
-	if (bHasLatNames && data.idCountry === 'RUS' && data.idType === 'ID_CARD') // Russian internal passport
-		bHasLatNames = false;
-	if (scan_result && !bHasLatNames){
-		scan_result = 0;
-		error = "couldn't extract your name. Please [try again](command:again) and provide a document with your name printed in Latin characters.";
-	}
-	if (scan_result && !data.identityVerification){
-		console.error("no identityVerification in tx "+transaction_id);
-		return;
-	}
-	if (scan_result && (!data.identityVerification.validity || data.identityVerification.similarity !== 'MATCH')){ // selfie check and selfie match
-		scan_result = 0;
-		error = data.identityVerification.reason || data.identityVerification.similarity;
-	}
-	handleAttestation(transaction_id, body, data, scan_result, error);
-}
-
-function handleVeriffData(transaction_id, body){
-	let data = body.verification ? veriffApi.convertRestResponseToCallbackFormat(body) : body;
-	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
-	let error = !scan_result ? data.verificationStatus : '';
-	if (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry) {
-		scan_result = 0;
-		error = 'some required data missing';
-	}
-	handleAttestation(transaction_id, body, data, scan_result, error);
-}
-
-function handleSmartIdData(transaction_id, body){
-	let data = body.status ? smartidApi.convertRestResponseToCallbackFormat(body) : body;
-	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
-	let error = !scan_result ? data.verificationStatus : '';
-	if (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry) {
-		scan_result = 0;
-		error = 'some required data missing';
-	}
-	handleAttestation(transaction_id, body, data, scan_result, error);
 }
 
 function handleAttestation(transaction_id, body, data, scan_result, error) {
@@ -746,16 +700,20 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
 			
 			if (text === 'jumio' || text === 'veriff' || text === 'eideasy'){
-				userInfo.service_provider = text;
+				if (text === 'jumio' && conf.apiToken && conf.apiSecret) {
+					userInfo.service_provider = text;
+					response += texts.providerJumio() + "\n\n";
+				}
+				else if (text === 'veriff' && conf.apiVeriffPublicKey && conf.apiVeriffPrivateKey) {
+					userInfo.service_provider = text;
+					response += texts.providerVeriff() + "\n\n";
+				}
+				else if (text === 'eideasy' && conf.apiSmartIdToken && conf.apiSmartIdSecret) {
+					userInfo.service_provider = text;
+					response += texts.providerSmartID() + "\n\n";
+				}
 				db.query("UPDATE users SET service_provider=? WHERE device_address=? AND user_address=?;", 
 					[userInfo.service_provider, from_address, userInfo.user_address]);
-				
-				if (userInfo.service_provider === 'jumio')
-					response += texts.providerJumio() + "\n\n";
-				else if (userInfo.service_provider === 'veriff')
-					response += texts.providerVeriff() + "\n\n";
-				else if (userInfo.service_provider === 'eideasy')
-					response += texts.providerSmartID() + "\n\n";
 			}
 			if (!userInfo.service_provider)
 				return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders());
@@ -983,9 +941,11 @@ eventBus.once('headless_and_rates_ready', () => {
 	});
 });
 
-
-function pollAndHandleJumioScanData(){
-	serviceHelper.pollJumioScanData(handleJumioData);
+function pollAndHandleAttestation(){
+	if (conf.apiToken && conf.apiSecret)
+		jumioApi.pollScanData(handleAttestation);
+	if (conf.apiVeriffPublicKey && conf.apiVeriffPrivateKey)
+		veriffApi.pollScanData(handleAttestation);
 }
 
 eventBus.once('headless_wallet_ready', () => {
@@ -1029,9 +989,7 @@ eventBus.once('headless_wallet_ready', () => {
 							setInterval(serviceHelper.retryInitScans, 60*1000);
 							setInterval(rna.retryPostingAttestations, 10*1000);
 							setInterval(reward.retrySendingRewards, 120*1000);
-							if (conf.apiToken && conf.apiSecret) {
-								setInterval(pollAndHandleJumioScanData, 300*1000);
-							}
+							setInterval(pollAndHandleAttestation, 300*1000);
 							setInterval(moveFundsToAttestorAddresses, 60*1000);
 							setInterval(reward.sendDonations, 7*24*3600*1000);
 							setInterval(serviceHelper.cleanExtractedData, 24*3600*1000);

@@ -2,23 +2,24 @@
 'use strict';
 const request = require('request');
 const crypto = require('crypto');
+const db = require('ocore/db');
 const conf = require('ocore/conf.js');
 const notifications = require('./notifications.js');
 
 function retrieveScanData(verificationID, onDone){
-	console.log('retrieveScanData', verificationID);
+	console.log('retrieveVeriffScanData', verificationID);
 	if (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey || !conf.apiVeriffBaseUrl) {
 		throw Error("veriff credentials missing");
 	}
+	let url = conf.apiVeriffBaseUrl + '/v1/sessions/' + verificationID + '/decision';
 	request({
 		method: 'GET',
-		url: conf.apiVeriffBaseUrl + '/v1/sessions/' + verificationID,
+		url,
 		headers: {
 			"Content-Type" : "application/json",
 			'X-AUTH-CLIENT': conf.apiVeriffPublicKey,
 			'X-SIGNATURE'  : generateSignature(verificationID)
-		}, 
-		body,
+		},
 		json: true
 	}, function (error, response, body){
 		if (error || response.statusCode !== 200){
@@ -28,6 +29,25 @@ function retrieveScanData(verificationID, onDone){
 		console.log("response: ", body);
 		onDone(body);
 	});
+}
+
+function pollScanData(handleAttestation){
+	console.log('pollVeriffScanData');
+	db.query(
+		"SELECT jumioIdScanReference, transaction_id \n\
+		FROM transactions JOIN receiving_addresses USING(receiving_address) \n\
+		WHERE service_provider = 'veriff' AND scan_result IS NULL AND jumioIdScanReference IS NOT NULL", 
+		rows => {
+			rows.forEach(row => {
+				retrieveScanData(row.jumioIdScanReference, body => {
+					// check if decision has been made
+					if (!body || !body.verification)
+						return;
+					handleData(row.transaction_id, body, handleAttestation);
+				});
+			});
+		}
+	);
 }
 
 function initScan(scanReference, onDone){
@@ -87,6 +107,17 @@ function generateSignature(payload) {
 	return signature.digest('hex');
 };
 
+function handleData(transaction_id, body, handleAttestation){
+	let data = body.verification ? convertRestResponseToCallbackFormat(body) : body;
+	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
+	let error = !scan_result ? data.verificationStatus : '';
+	if (!error && (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry)) {
+		scan_result = 0;
+		error = 'some required data missing';
+	}
+	handleAttestation(transaction_id, body, data, scan_result, error);
+}
+
 function convertRestResponseToCallbackFormat(body){
 	let person_data = body.verification.person;
 	let document_data = body.verification.document;
@@ -111,7 +142,8 @@ function convertRestResponseToCallbackFormat(body){
 }
 
 exports.initScan = initScan;
-exports.retrieveScanData = retrieveScanData;
+exports.pollScanData = pollScanData;
 exports.generateSignature = generateSignature;
+exports.handleData = handleData;
 exports.convertRestResponseToCallbackFormat = convertRestResponseToCallbackFormat;
 
