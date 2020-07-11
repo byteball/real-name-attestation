@@ -110,7 +110,7 @@ function findReferrer(payment_unit, handleReferrer){
 	
 	function goBack(arrUnits){
 		depth++;
-		if (!arrUnits || !arrUnits.length) return selectReferrer();
+		if (!arrUnits || !arrUnits.length) return handleReferrer();
 		db.query(
 			"SELECT address, src_unit, main_chain_index FROM inputs JOIN units ON src_unit=units.unit \n\
 			WHERE inputs.unit IN(?) AND type='transfer' AND asset IS NULL", 
