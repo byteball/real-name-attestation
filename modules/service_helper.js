@@ -63,7 +63,7 @@ function initAndWriteVeriffScan(transaction_id, device_address, user_address, on
 						unlock();
 						if (onDone)
 							onDone();
-						return device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification less than 7 days.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Veriff will take some time to process the images, it can take couple hours. We'll message you only when the final outcome is known.");
+						return device.sendMessageToDevice(device_address, 'text', "Please click this link to start verification: "+redirect_url+"\nYou need to complete the verification in less than 7 days.\n\nRemember that the payment is non-refundable. To successfully complete the verification after the first attempt, make sure that you have good lighting conditions, good focus, and no glare when you make the photos.\n\nAfter you are done making photos of your ID and your face, Veriff will take some time to process the images, it can take couple hours. We'll message you only when the final outcome is known.");
 					}
 				);
 			});
