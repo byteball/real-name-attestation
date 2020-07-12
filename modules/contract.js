@@ -15,11 +15,11 @@ function createContract(user_address, device_address){
 	let arrDefinition = ['or', [
 		['and', [
 			['address', user_address],
-			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', vesting_ts]]
+			['timestamp', ['>', Math.round(vesting_ts/1000)]]
 		]],
 		['and', [
 			['address', reward.distribution_address],
-			['in data feed', [[conf.TIMESTAMPER_ADDRESS], 'timestamp', '>', claim_back_ts]]
+			['timestamp', ['>', Math.round(claim_back_ts/1000)]]
 		]]
 	]];
 	let assocSignersByPath = {
