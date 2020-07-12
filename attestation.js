@@ -11,9 +11,10 @@ const validationUtils = require('ocore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
 const smartidApi = require('./modules/smartid_api.js');
+const veriffApi = require('./modules/veriff_api.js');
 const jumioApi = require('./modules/jumio_api.js');
 const serviceHelper = require('./modules/service_helper.js');
-const realNameAttestation = require('./modules/real_name_attestation.js');
+const rna = require('./modules/real_name_attestation.js');
 const reward = require('./modules/reward.js');
 const contract = require('./modules/contract.js');
 const discounts = require('./modules/discounts.js');
@@ -94,14 +95,14 @@ function moveFundsToAttestorAddresses(){
 		FROM receiving_addresses CROSS JOIN outputs ON receiving_address=address JOIN units USING(unit) \n\
 		WHERE is_stable=1 AND is_spent=0 AND asset IS NULL AND receiving_address NOT IN(?) \n\
 		LIMIT ?",
-		[Object.values(realNameAttestation.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
+		[Object.values(rna.assocAttestorAddresses), constants.MAX_AUTHORS_PER_UNIT],
 		rows => {
 			if (rows.length === 0)
 				return;
 			let arrAddresses = rows.map(row => row.receiving_address);
 			let headlessWallet = require('headless-obyte');
-			let timestampMod = Date.now() % 3;
-			let to_address = realNameAttestation.assocAttestorAddresses[timestampMod === 2 ? 'jumio' : (timestampMod === 1 ? 'eideasy' : 'nonus')];
+			let timestampMod = Date.now() % 4;
+			let to_address = rna.assocAttestorAddresses[timestampMod === 3 ? 'jumio' : (timestampMod === 2 ? 'veriff' : (timestampMod === 1 ? 'eideasy' : 'nonus'))];
 			headlessWallet.sendMultiPayment({
 				asset: null,
 				to_address: to_address,
@@ -119,7 +120,8 @@ function moveFundsToAttestorAddresses(){
 }
 
 //app.use(express.static(__dirname + '/public'));
-app.use(bodyParser.urlencoded({ extended: false })); 
+app.use(bodyParser.urlencoded({ extended: false })); // parse application/x-www-form-urlencoded
+app.use(bodyParser.json()); // parse application/json
 app.set('trust proxy', true); // get remote address when using proxy
 
 app.post('*/cb', function(req, res) {
@@ -142,7 +144,7 @@ app.post('*/cb', function(req, res) {
 				notifications.notifyAdmin("duplicate cb", JSON.stringify(body));
 				return res.send(JSON.stringify({result: 'error', error: "duplicate cb"}));
 			}
-			handleJumioData(row.transaction_id, body);
+			jumioApi.handleData(row.transaction_id, body, handleAttestation);
 			res.send('ok');
 		}
 	);
@@ -173,6 +175,40 @@ app.get('*/smartid', function(req, res) {
 		}
 	);
 });
+
+app.get('*/veriff', handleVeriffCallback); // user callback URL
+app.post('*/veriff', handleVeriffCallback); // webhook callback URLs
+
+function handleVeriffCallback(req, res) {
+	if (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey || !conf.apiVeriffBaseUrl) {
+		return res.send("veriff credentials missing");
+	}
+	let body = req.body;
+	//console.error(req.header('X-AUTH-CLIENT'), conf.apiVeriffPublicKey, req.header('X-SIGNATURE'), veriffApi.generateSignature(body));
+	if (body && body.verification && body.verification.id) {
+		if (req.header('X-AUTH-CLIENT') === conf.apiVeriffPublicKey && req.header('X-SIGNATURE') === veriffApi.generateSignature(body)) {
+			db.query(
+				"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
+				[body.verification.id], 
+				rows => {
+					if (rows.length){
+						let row = rows[0];
+						if (row.scan_result !== null){
+							notifications.notifyAdmin("duplicate verification", JSON.stringify(body));
+						}
+						else
+							veriffApi.handleData(row.transaction_id, body, handleAttestation);
+					}
+					else
+						notifications.notifyAdmin("veriff scan not found", JSON.stringify(body));
+				}
+			);
+		}
+		else
+			notifications.notifyAdmin("veriff signature invalid", JSON.stringify([req.header('X-AUTH-CLIENT'), conf.apiVeriffPublicKey, req.header('X-SIGNATURE'), veriffApi.generateSignature(body)]));
+	}
+	return res.sendFile(__dirname+'/waiting.html');
+}
 
 app.get('*/done', handleSmartIdCallback);
 app.post('*/done', handleSmartIdCallback);
@@ -207,7 +243,7 @@ function handleSmartIdCallback(req, res) {
 					smartidApi.getUserData(auth.access_token, function(err, body) {
 						if (body) {
 							body.clientIp = req.ip; // get user ip from callback URL
-							handleSmartIdData(row.transaction_id, body);
+							smartidApi.handleData(row.transaction_id, body, handleAttestation);
 						}
 						if (err) {
 							console.error('getUserData', err, body);
@@ -238,41 +274,6 @@ function getCountryByIp(ip){
 	return ipCountry;
 }
 
-function handleJumioData(transaction_id, body){
-	let data = body.transaction ? jumioApi.convertRestResponseToCallbackFormat(body) : body;
-	if (typeof data.identityVerification === 'string') // contrary to docs, it is a string, not an object
-		data.identityVerification = JSON.parse(data.identityVerification);
-	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
-	let error = scan_result ? '' : data.verificationStatus;
-	let bHasLatNames = (scan_result && data.idFirstName && data.idLastName && data.idFirstName !== 'N/A' && data.idLastName !== 'N/A');
-	if (bHasLatNames && data.idCountry === 'RUS' && data.idType === 'ID_CARD') // Russian internal passport
-		bHasLatNames = false;
-	if (scan_result && !bHasLatNames){
-		scan_result = 0;
-		error = "couldn't extract your name. Please [try again](command:again) and provide a document with your name printed in Latin characters.";
-	}
-	if (scan_result && !data.identityVerification){
-		console.error("no identityVerification in tx "+transaction_id);
-		return;
-	}
-	if (scan_result && (!data.identityVerification.validity || data.identityVerification.similarity !== 'MATCH')){ // selfie check and selfie match
-		scan_result = 0;
-		error = data.identityVerification.reason || data.identityVerification.similarity;
-	}
-	handleAttestation(transaction_id, body, data, scan_result, error);
-}
-
-function handleSmartIdData(transaction_id, body){
-	let data = body.status ? smartidApi.convertRestResponseToCallbackFormat(body) : body;
-	let scan_result = (data.verificationStatus === 'APPROVED_VERIFIED') ? 1 : 0;
-	let error = body.error_description ? body.error_description : '';
-	if (!data.idFirstName || !data.idLastName || !data.idDob || !data.idCountry) {
-		scan_result = 0;
-		error = 'some required data missing';
-	}
-	handleAttestation(transaction_id, body, data, scan_result, error);
-}
-
 function handleAttestation(transaction_id, body, data, scan_result, error) {
 	let device = require('ocore/device.js');
 
@@ -298,8 +299,11 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 						bNonUS = false;
 				}
 				db.query("INSERT "+db.getIgnore()+" INTO attestation_units (transaction_id, attestation_type) VALUES (?, 'real name')", [transaction_id], async () => {
-					let [attestation, src_profile] = realNameAttestation.getAttestationPayloadAndSrcProfile(row.user_address, data, row.service_provider);
-					realNameAttestation.postAndWriteAttestation(transaction_id, 'real name', realNameAttestation.assocAttestorAddresses[row.service_provider === 'eideasy' ? 'eideasy' : 'jumio'], attestation, src_profile);
+					let [attestation, src_profile] = rna.getAttestationPayloadAndSrcProfile(row.user_address, data, row.service_provider);
+					if (!rna.assocAttestorAddresses[row.service_provider])
+						notifications.notifyAdmin("missing service provider", "transaction id: "+transaction_id);
+					else 
+						rna.postAndWriteAttestation(transaction_id, 'real name', rna.assocAttestorAddresses[row.service_provider], attestation, src_profile);
 
 					setTimeout(() => {
 						if (bNonUS){
@@ -383,7 +387,7 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 											JOIN attestations USING (unit, message_index)
 											WHERE address=? AND attestor_address IN (?)
 											ORDER BY attestations.rowid DESC LIMIT 1`,
-											[voucherInfo.user_address, [realNameAttestation.assocAttestorAddresses['jumio'], realNameAttestation.assocAttestorAddresses['eideasy']]],
+											[voucherInfo.user_address, [rna.assocAttestorAddresses['jumio'], rna.assocAttestorAddresses['veriff'], rna.assocAttestorAddresses['eideasy']]],
 											function(rows) {
 												if (!rows.length) {
 													throw Error(`no attestation for voucher user_address ${voucherInfo.user_address}`);
@@ -397,6 +401,9 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 												if (row.service_provider === 'eideasy') {
 													amountUSD += conf.priceInUSDforSmartID;
 												}
+												else if (row.service_provider === 'veriff') {
+													amountUSD += conf.priceInUSDforVeriff;
+												}
 												else {
 													amountUSD += conf.priceInUSD;
 												}
@@ -409,7 +416,8 @@ function handleAttestation(transaction_id, body, data, scan_result, error) {
 													[transaction_id, voucherInfo.user_address, user_id, row.user_address, attestation.profile.user_id, amount],
 													(res) => {
 														console.log("referral_reward_units insertId: "+res.insertId+", affectedRows: "+res.affectedRows);
-														device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user just verified his identity using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Obyte distribution fund to your smart voucher. Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!`);
+														let reward_text = `using your smart voucher ${voucherInfo.voucher} and you will receive a reward of $${amountUSD.toLocaleString([], {minimumFractionDigits: 2})} (${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB) from Obyte distribution fund to your smart voucher`;
+														device.sendMessageToDevice(voucherInfo.device_address, 'text', texts.referredNewUser(reward_text));
 														reward.sendAndWriteReward('referral', transaction_id);
 														unlock();
 													}
@@ -433,6 +441,9 @@ async function getPriceInUSD(user_address, service_provider){
 	let discountPrice = conf.priceInUSD;
 	if (service_provider === 'eideasy') {
 		discountPrice = conf.priceInUSDforSmartID;
+	}
+	else if (service_provider === 'veriff') {
+		discountPrice = conf.priceInUSDforVeriff;
 	}
 	discountPrice *= 1-objDiscount.discount/100;
 	objDiscount.priceInUSDnoRound = discountPrice;
@@ -663,11 +674,14 @@ function respond(from_address, text, response){
 										connection.release();
 										unlock();
 
-										if (userInfo.service_provider === 'eideasy') {
-											serviceHelper.initSmartIdLogin(transaction_id, from_address, userInfo.user_address);
-										}
-										else {
+										if (userInfo.service_provider === 'jumio') {
 											serviceHelper.initAndWriteJumioScan(transaction_id, from_address, userInfo.user_address);
+										}
+										else if (userInfo.service_provider === 'veriff') {
+											serviceHelper.initAndWriteVeriffScan(transaction_id, from_address, userInfo.user_address);
+										}
+										else if (userInfo.service_provider === 'eideasy') {
+											serviceHelper.initSmartIdLogin(transaction_id, from_address, userInfo.user_address);
 										}
 										device.sendMessageToDevice(voucherInfo.device_address, 'text', `A user has just used your smart voucher ${text} to pay for attestation, new voucher balance ${((voucherInfo.amount-price)/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB`);
 									});
@@ -685,15 +699,21 @@ function respond(from_address, text, response){
 			if (user_address_response)
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
 			
-			if (text === 'jumio' || text === 'eideasy'){
-				userInfo.service_provider = text;
+			if (text === 'jumio' || text === 'veriff' || text === 'eideasy'){
+				if (text === 'jumio' && conf.apiToken && conf.apiSecret) {
+					userInfo.service_provider = text;
+					response += texts.providerJumio() + "\n\n";
+				}
+				else if (text === 'veriff' && conf.apiVeriffPublicKey && conf.apiVeriffPrivateKey) {
+					userInfo.service_provider = text;
+					response += texts.providerVeriff() + "\n\n";
+				}
+				else if (text === 'eideasy' && conf.apiSmartIdToken && conf.apiSmartIdSecret) {
+					userInfo.service_provider = text;
+					response += texts.providerSmartID() + "\n\n";
+				}
 				db.query("UPDATE users SET service_provider=? WHERE device_address=? AND user_address=?;", 
 					[userInfo.service_provider, from_address, userInfo.user_address]);
-				
-				if (userInfo.service_provider === "eideasy")
-					response += texts.providerSmartID() + "\n\n";
-				else
-					response += texts.providerJumio() + "\n\n";
 			}
 			if (!userInfo.service_provider)
 				return device.sendMessageToDevice(from_address, 'text', response + texts.welcomeProviders());
@@ -733,17 +753,20 @@ function respond(from_address, text, response){
 									response + "Bot doesn't have this data anymore, you will need to attest [again](command:again)." );
 							}
 							let cb_data;
-							if (userInfo.service_provider === 'eideasy') {
-								cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
-							}
-							else {
+							if (userInfo.service_provider === 'jumio') {
 								cb_data = data.transaction ? jumioApi.convertRestResponseToCallbackFormat(data) : data;
+							}
+							else if (userInfo.service_provider === 'veriff') {
+								cb_data = data.verification ? veriffApi.convertRestResponseToCallbackFormat(data) : data;
+							}
+							else if (userInfo.service_provider === 'eideasy') {
+								cb_data = data.status ? smartidApi.convertRestResponseToCallbackFormat(data) : data;
 							}
 							if (cb_data.idCountry === 'USA' || cb_data.idCountry === 'US')
 								return device.sendMessageToDevice(from_address, 'text', response + "You are an US citizen, can't attest non-US");
 							db.query("INSERT INTO attestation_units (transaction_id, attestation_type) VALUES (?,'nonus')", [row.transaction_id], ()=>{
-								let nonus_attestation = realNameAttestation.getNonUSAttestationPayload(row.user_address);
-								realNameAttestation.postAndWriteAttestation(row.transaction_id, 'nonus', realNameAttestation.assocAttestorAddresses['nonus'], nonus_attestation);
+								let nonus_attestation = rna.getNonUSAttestationPayload(row.user_address);
+								rna.postAndWriteAttestation(row.transaction_id, 'nonus', rna.assocAttestorAddresses['nonus'], nonus_attestation);
 								setTimeout(() => {
 									if (assocAskedForDonation[from_address])
 										return;
@@ -890,11 +913,14 @@ eventBus.once('headless_and_rates_ready', () => {
 				rows.forEach(row => {
 					db.query("UPDATE transactions SET confirmation_date="+db.getNow()+", is_confirmed=1 WHERE transaction_id=?", [row.transaction_id]);
 					if (!conf.bAcceptUnconfirmedPayments) device.sendMessageToDevice(row.device_address, 'text', "Your payment is confirmed, redirecting to attestation service provider...");
-					if (row.service_provider === 'eideasy') {
-						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
-					}
-					else {
+					if (row.service_provider === 'jumio') {
 						serviceHelper.initAndWriteJumioScan(row.transaction_id, row.device_address, row.user_address);
+					}
+					else if (row.service_provider === 'veriff') {
+						serviceHelper.initAndWriteVeriffScan(row.transaction_id, row.device_address, row.user_address);
+					}
+					else if (row.service_provider === 'eideasy') {
+						serviceHelper.initSmartIdLogin(row.transaction_id, row.device_address, row.user_address);
 					}
 				});
 			}
@@ -915,9 +941,11 @@ eventBus.once('headless_and_rates_ready', () => {
 	});
 });
 
-
-function pollAndHandleJumioScanData(){
-	serviceHelper.pollJumioScanData(handleJumioData);
+function pollAndHandleAttestation(){
+	if (conf.apiToken && conf.apiSecret)
+		jumioApi.pollScanData(handleAttestation);
+	if (conf.apiVeriffPublicKey && conf.apiVeriffPrivateKey)
+		veriffApi.pollScanData(handleAttestation);
 }
 
 eventBus.once('headless_wallet_ready', () => {
@@ -942,31 +970,36 @@ eventBus.once('headless_wallet_ready', () => {
 		let headlessWallet = require('headless-obyte');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, address1 => {
 			console.log('== Jumio Netverify attestation address: '+address1);
-			realNameAttestation.assocAttestorAddresses['jumio'] = address1;
+			rna.assocAttestorAddresses['jumio'] = address1;
 			headlessWallet.issueOrSelectAddressByIndex(0, 1, address2 => {
 				console.log('== non-US attestation address: '+address2);
-				realNameAttestation.assocAttestorAddresses['nonus'] = address2;
+				rna.assocAttestorAddresses['nonus'] = address2;
 				headlessWallet.issueOrSelectAddressByIndex(0, 2, address3 => {
 					console.log('== distribution address: '+address3);
 					reward.distribution_address = address3;
 					headlessWallet.issueOrSelectAddressByIndex(0, 3, address4 => {
 						console.log('== eID Easy attestation address: '+address4);
-						realNameAttestation.assocAttestorAddresses['eideasy'] = address4;
+						rna.assocAttestorAddresses['eideasy'] = address4;
+						headlessWallet.issueOrSelectAddressByIndex(0, 4, address5 => {
+							console.log('== Veriff attestation address: '+address5);
+							rna.assocAttestorAddresses['veriff'] = address5;
 
-						server.listen(conf.webPort);
-						
-						setInterval(serviceHelper.retryInitScans, 60*1000);
-						setInterval(realNameAttestation.retryPostingAttestations, 10*1000);
-						setInterval(reward.retrySendingRewards, 120*1000);
-						setInterval(pollAndHandleJumioScanData, 300*1000);
-						setInterval(moveFundsToAttestorAddresses, 60*1000);
-						setInterval(reward.sendDonations, 7*24*3600*1000);
-						setInterval(serviceHelper.cleanExtractedData, 24*3600*1000);
-						
-						const consolidation = require('headless-obyte/consolidation.js');
-						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
-						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['eideasy'], headlessWallet.signer, 100, 3600*1000);
-						consolidation.scheduleConsolidation(realNameAttestation.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);
+							server.listen(conf.webPort);
+							
+							setInterval(serviceHelper.retryInitScans, 60*1000);
+							setInterval(rna.retryPostingAttestations, 10*1000);
+							setInterval(reward.retrySendingRewards, 120*1000);
+							setInterval(pollAndHandleAttestation, 300*1000);
+							setInterval(moveFundsToAttestorAddresses, 60*1000);
+							setInterval(reward.sendDonations, 7*24*3600*1000);
+							setInterval(serviceHelper.cleanExtractedData, 24*3600*1000);
+							
+							const consolidation = require('headless-obyte/consolidation.js');
+							consolidation.scheduleConsolidation(rna.assocAttestorAddresses['jumio'], headlessWallet.signer, 100, 3600*1000);
+							consolidation.scheduleConsolidation(rna.assocAttestorAddresses['veriff'], headlessWallet.signer, 100, 3600*1000);
+							consolidation.scheduleConsolidation(rna.assocAttestorAddresses['eideasy'], headlessWallet.signer, 100, 3600*1000);
+							consolidation.scheduleConsolidation(rna.assocAttestorAddresses['nonus'], headlessWallet.signer, 100, 3600*1000);
+						});
 					});
 				});
 			});

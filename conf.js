@@ -44,6 +44,11 @@ exports.MIN_AVAILABLE_WITNESSINGS = 100;
 exports.apiToken = '';
 exports.apiSecret = '';
 
+// veriff api credentials 
+exports.apiVeriffPublicKey = '';
+exports.apiVeriffPrivateKey = '';
+exports.apiVeriffBaseUrl = 'https://stationapi.veriff.com';
+
 // id.eideasy.com api credentials 
 exports.apiSmartIdToken = '';
 exports.apiSmartIdSecret = '';
@@ -51,6 +56,7 @@ exports.apiSmartIdCallback = 'https://oid.one/done';
 exports.apiSmartIdRedirect = 'https://oid.one/smartid';
 
 exports.priceInUSD = 8;
+exports.priceInUSDforVeriff = 6;
 exports.priceInUSDforSmartID = 0.5;
 exports.contractRewardInUSD = 8;
 exports.referralRewardInUSD = 0;
