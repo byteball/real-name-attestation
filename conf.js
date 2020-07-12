@@ -56,7 +56,7 @@ exports.apiSmartIdCallback = 'https://oid.one/done';
 exports.apiSmartIdRedirect = 'https://oid.one/smartid';
 
 exports.priceInUSD = 8;
-exports.priceInUSDforVeriff = 6;
+exports.priceInUSDforVeriff = 8;
 exports.priceInUSDforSmartID = 0.5;
 exports.contractRewardInUSD = 8;
 exports.referralRewardInUSD = 0;
