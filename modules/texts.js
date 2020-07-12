@@ -90,7 +90,7 @@ exports.welcomeProviders = (service_provider) => {
 	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], {minimumFractionDigits: 2});
 	let display_providers = 'Please select an attestation service provider:';
 
-	display_providers += (!conf.apiToken || !conf.apiSecret) ? '' : `\n\n[Jumio Netverify](command:jumio) ${jumioSelected}
+	display_providers += (!conf.apiJumioToken || !conf.apiJumioSecret) ? '' : `\n\n[Jumio Netverify](command:jumio) ${jumioSelected}
 Jumio Netverify is available worldwide. It uses your webcam to take photos of your passport, ID card, or driver's license and it costs $${jumioPrice} per attempt.`;
 
 	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n\n[Veriff](command:veriff) ${veriffSelected}
@@ -103,7 +103,7 @@ eID Easy is available for residents of Estonia, Latvia, Lithuania and e-resident
 }
 
 exports.providerJumio = () => {
-	if (!conf.apiToken || !conf.apiSecret) return 'jumio credentials missing';
+	if (!conf.apiJumioToken || !conf.apiJumioSecret) return 'jumio credentials missing';
 
 	return "After payment, you will be redirected to Jumio website for your document (passport, ID card, driver's licence) verification. Your device must have a high quality camera to make photos of your face and your document. Have your document ready before payment and make sure there is enough light in your room, the document must have your name printed in Latin characters.\n\nThe price of attestation is $"+conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2})+". The payment is nonrefundable even if the attestation fails for any reason.";
 }
@@ -130,7 +130,7 @@ function displayProvider(service_provider){
 	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
 	let display_providers = 'Currently selected attestation service provider';
 
-	display_providers += (!conf.apiToken || !conf.apiSecret) ? '' : `\n* [Jumio Netverify](command:jumio) ${jumioSelected}`;
+	display_providers += (!conf.apiJumioToken || !conf.apiJumioSecret) ? '' : `\n* [Jumio Netverify](command:jumio) ${jumioSelected}`;
 	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n* [Veriff](command:veriff) ${veriffSelected}`;
 	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n* [eID Easy](command:eideasy) ${smartidSelected}`;
 

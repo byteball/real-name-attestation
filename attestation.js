@@ -700,7 +700,7 @@ function respond(from_address, text, response){
 				return device.sendMessageToDevice(from_address, 'text', response + user_address_response);
 			
 			if (text === 'jumio' || text === 'veriff' || text === 'eideasy'){
-				if (text === 'jumio' && conf.apiToken && conf.apiSecret) {
+				if (text === 'jumio' && conf.apiJumioToken && conf.apiJumioSecret) {
 					userInfo.service_provider = text;
 					response += texts.providerJumio() + "\n\n";
 				}
@@ -942,7 +942,7 @@ eventBus.once('headless_and_rates_ready', () => {
 });
 
 function pollAndHandleAttestation(){
-	if (conf.apiToken && conf.apiSecret)
+	if (conf.apiJumioToken && conf.apiJumioSecret)
 		jumioApi.pollScanData(handleAttestation);
 	if (conf.apiVeriffPublicKey && conf.apiVeriffPrivateKey)
 		veriffApi.pollScanData(handleAttestation);

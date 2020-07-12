@@ -8,7 +8,7 @@ const notifications = require('./notifications.js');
 //require('request-debug')(request);
 
 function sendRestRequest(url, onDone){
-	if (!conf.apiToken || !conf.apiSecret) {
+	if (!conf.apiJumioToken || !conf.apiJumioSecret) {
 		throw Error("jumio credentials missing");
 	}
 	let headers = {
@@ -20,8 +20,8 @@ function sendRestRequest(url, onDone){
 		headers: headers, 
 		method: 'GET', 
 		auth: {
-			user: conf.apiToken,
-			pass: conf.apiSecret,
+			user: conf.apiJumioToken,
+			pass: conf.apiJumioSecret,
 			sendImmediately: true
 		}
 	}, function (error, response, body){
@@ -81,10 +81,10 @@ function pollScanData(handleAttestation){
 }
 
 function initScan(userReference, scanReference, onDone){
-	if (!conf.apiToken || !conf.apiSecret) {
+	if (!conf.apiJumioToken || !conf.apiJumioSecret) {
 		throw Error("jumio credentials missing");
 	}
-//	let auth = "Basic " + new Buffer(conf.apiToken + ":" + conf.apiSecret).toString("base64");
+//	let auth = "Basic " + new Buffer(conf.apiJumioToken + ":" + conf.apiJumioSecret).toString("base64");
 	let headers = {
 		"Content-Type": "application/json",
 		"User-Agent": "Obyte attestation/1.0"
@@ -103,8 +103,8 @@ function initScan(userReference, scanReference, onDone){
 		method: 'POST', 
 		json: json,
 		auth: {
-			user: conf.apiToken,
-			pass: conf.apiSecret,
+			user: conf.apiJumioToken,
+			pass: conf.apiJumioSecret,
 			sendImmediately: true
 		}
 	}, function (error, response, body){

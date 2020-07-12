@@ -41,8 +41,8 @@ exports.THRESHOLD_DISTANCE = 20;
 exports.MIN_AVAILABLE_WITNESSINGS = 100;
 
 // jumio api credentials 
-exports.apiToken = '';
-exports.apiSecret = '';
+exports.apiJumioToken = '';
+exports.apiJumioSecret = '';
 
 // veriff api credentials 
 exports.apiVeriffPublicKey = '';
