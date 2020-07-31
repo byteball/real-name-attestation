@@ -7,6 +7,7 @@ const eventBus = require('ocore/event_bus.js');
 const texts = require('./modules/texts.js');
 const db_migrations = require('./db_migrations.js');
 const db_migrations2 = require('./db_migrations2.js');
+const walletDefinedByAddresses = require('ocore/wallet_defined_by_addresses');
 const validationUtils = require('ocore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
@@ -28,7 +29,7 @@ const mutex = require('ocore/mutex.js');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
 
-let countryLookup = maxmind.openSync('../GeoLite2-Country.mmdb');
+let countryLookup = maxmind.openSync(__dirname + '/../GeoLite2-Country.mmdb');
 
 let assocAskedForDonation = {};
 
@@ -501,7 +502,22 @@ function respond(from_address, text, response){
 					});
 			})
 		}
-		
+
+		if (text === 'resend') {
+			walletDefinedByAddresses.sendToPeerAllSharedAddressesHavingUnspentOutputs(from_address, "base", {
+				ifFundedSharedAddress: function(numberOfContracts) {
+					device.sendMessageToDevice(from_address, "text",
+						`Found and resent ${numberOfContracts} smart contracts that have Bytes on them to your wallet. Please be aware that contracts can only be restored to the same wallet they were originally sent to.`
+					);
+				},
+				ifNoFundedSharedAddress: function() {
+					device.sendMessageToDevice(from_address, "text",
+						`No smart contracts with Bytes on it were found. Please be aware, that smart contracts can only be resent to the wallet they were sent to originally. If you have an old backup or even the seed words, you can try to restore that and request resending the smart contracts again.`
+					);
+				}
+			});
+			return;
+		}
 		if (lc_text === 'help')
 			return device.sendMessageToDevice(from_address, 'text', texts.vouchersHelp());
 		if (lc_text === 'new voucher') {
