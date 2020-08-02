@@ -7,7 +7,6 @@ const eventBus = require('ocore/event_bus.js');
 const texts = require('./modules/texts.js');
 const db_migrations = require('./db_migrations.js');
 const db_migrations2 = require('./db_migrations2.js');
-const walletDefinedByAddresses = require('ocore/wallet_defined_by_addresses');
 const validationUtils = require('ocore/validation_utils');
 const notifications = require('./modules/notifications');
 const conversion = require('./modules/conversion.js');
@@ -504,6 +503,7 @@ function respond(from_address, text, response){
 		}
 
 		if (text === 'resend') {
+			const walletDefinedByAddresses = require('ocore/wallet_defined_by_addresses');
 			walletDefinedByAddresses.sendToPeerAllSharedAddressesHavingUnspentOutputs(from_address, "base", {
 				ifFundedSharedAddress: function(numberOfContracts) {
 					device.sendMessageToDevice(from_address, "text",
