@@ -3,6 +3,7 @@
 const desktopApp = require('ocore/desktop_app.js');
 const conf = require('ocore/conf.js');
 const conversion = require('./conversion.js');
+const pairingProtocol = process.env.testnet ? 'obyte-tn:' : 'obyte:';
 
 
 exports.greeting = () => {
@@ -57,7 +58,7 @@ exports.limitVoucher = (voucher = 'XXXXXXXXX', amount = 2) => {
 exports.payToVoucher = (receiving_address, voucher, amount, user_address) => {
 	if (!amount)
 		throw Error("amount missing");
-	return `Please pay ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](byteball:${receiving_address}?amount=${amount})`;
+	return `Please pay ${(amount/1e9).toLocaleString([], {maximumFractionDigits: 9})} GB to deposit your smart voucher ${voucher}: [deposit voucher](${pairingProtocol}${receiving_address}?amount=${amount})`;
 };
 
 exports.vouchersHelp = () => {
@@ -144,7 +145,7 @@ exports.pleasePayOrProvider = (receiving_address, price, user_address, service_p
 exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceInUSD, have_attestation) => {
 	if (!price)
 		throw Error("price missing");
-	let text = `Click to pay: [attestation payment](byteball:${receiving_address}?amount=${price}&single_address=single${user_address})`;
+	let text = `Click to pay: [attestation payment](${pairingProtocol}${receiving_address}?amount=${price}&single_address=single${user_address})`;
 	if (!have_attestation)
 		text += ` or if you have a smart voucher, insert it below.`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
