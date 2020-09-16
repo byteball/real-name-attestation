@@ -25,8 +25,11 @@ const app = express();
 const server = require('http').Server(app);
 const maxmind = require('maxmind');
 const mutex = require('ocore/mutex.js');
+const path = require('path');
 
 const PRICE_TIMEOUT = 3*24*3600; // in seconds
+const unsuccessfulAttestation = 'Authentication was unsuccessful.<br>Close this window and get back to the chat in the wallet to try again.';
+const successfulAttestation = 'Successfully authenticated.<br>Now you can close this window and get back to the chat in the wallet.';
 
 let countryLookup = maxmind.openSync(__dirname + '/../GeoLite2-Country.mmdb');
 
@@ -119,10 +122,14 @@ function moveFundsToAttestorAddresses(){
 	);
 }
 
-//app.use(express.static(__dirname + '/public'));
+app.use(express.static(__dirname + '/public'));
 app.use(bodyParser.urlencoded({ extended: false })); // parse application/x-www-form-urlencoded
 app.use(bodyParser.json()); // parse application/json
 app.set('trust proxy', true); // get remote address when using proxy
+
+// view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
 
 app.post('*/cb', function(req, res) {
 	let body = req.body;
@@ -155,7 +162,9 @@ app.get('*/smartid', function(req, res) {
 	console.error('received request', query);
 	if (!query.state){
 		notifications.notifyAdmin("eID Easy redirect without state", JSON.stringify(query));
-		return res.send("no state");
+		return res.render('done.ejs', {
+			'message': 'no state'
+		});
 	}
 	db.query(
 		"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
@@ -163,13 +172,17 @@ app.get('*/smartid', function(req, res) {
 		rows => {
 			if (rows.length === 0){
 				notifications.notifyAdmin("done state invalid", JSON.stringify(query));
-				return res.sendFile(__dirname+'/failed.html');
+				return res.render('done.ejs', {
+					'message': unsuccessfulAttestation
+				});
 			}
 			let row = rows[0];
 			if (row.scan_result !== null){
 				// when user refreshes
 				//notifications.notifyAdmin("duplicate done", JSON.stringify(query));
-				return res.sendFile(__dirname+'/done.html');
+				return res.render('done.ejs', {
+					'message': successfulAttestation
+				});
 			}
 			return res.redirect(smartidApi.getLoginUrl(query.state));
 		}
@@ -207,7 +220,9 @@ function handleVeriffCallback(req, res) {
 		else
 			notifications.notifyAdmin("veriff signature invalid", JSON.stringify([req.header('X-AUTH-CLIENT'), conf.apiVeriffPublicKey, req.header('X-SIGNATURE'), veriffApi.generateSignature(body)]));
 	}
-	return res.sendFile(__dirname+'/waiting.html');
+	return res.render('done.ejs', {
+		'message': 'Veriff will take some time to process the images, usually minutes but occasionally hours.<br>We\'ll message you only when the final outcome is known.<br>Now you can close this window.'
+	});
 }
 
 app.get('*/done', handleSmartIdCallback);
@@ -218,7 +233,9 @@ function handleSmartIdCallback(req, res) {
 	console.error('received request', query);
 	if (!query.code || !query.state){
 		notifications.notifyAdmin("done without code or state", JSON.stringify(query));
-		return res.send("no code or state");
+		return res.render('done.ejs', {
+			'message': 'no code or state'
+		});
 	}
 	db.query(
 		"SELECT transaction_id, scan_result FROM transactions WHERE jumioIdScanReference=?", 
@@ -226,18 +243,24 @@ function handleSmartIdCallback(req, res) {
 		rows => {
 			if (rows.length === 0){
 				notifications.notifyAdmin("done state invalid", JSON.stringify(query));
-				return res.sendFile(__dirname+'/failed.html');
+				return res.render('done.ejs', {
+					'message': unsuccessfulAttestation
+				});
 			}
 			let row = rows[0];
 			if (row.scan_result !== null){
 				// when user refreshes
 				//notifications.notifyAdmin("duplicate done", JSON.stringify(query));
-				return res.sendFile(__dirname+'/done.html');
+				return res.render('done.ejs', {
+					'message': successfulAttestation
+				});
 			}
 			smartidApi.getAccessToken(query.code, function(err, auth) {
 				if (err) {
 					console.error('getAccessToken', err, auth);
-					return res.sendFile(__dirname+'/failed.html');
+					return res.render('done.ejs', {
+						'message': unsuccessfulAttestation
+					});
 				}
 				else if (auth && auth.access_token) {
 					smartidApi.getUserData(auth.access_token, function(err, body) {
@@ -247,10 +270,14 @@ function handleSmartIdCallback(req, res) {
 						}
 						if (err) {
 							console.error('getUserData', err, body);
-							return res.sendFile(__dirname+'/failed.html');
+							return res.render('done.ejs', {
+								'message': unsuccessfulAttestation
+							});
 						}
 						else {
-							return res.sendFile(__dirname+'/done.html');
+							return res.render('done.ejs', {
+								'message': successfulAttestation
+							});
 						}
 					});
 				}

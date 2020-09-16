@@ -1,8 +1,9 @@
 {
   "name": "real-name-attestation",
   "version": "1.0.0",
-  "description": "A bot for attestation of real names through Jumio and eID Easy",
+  "description": "A bot for attestation of real names",
   "main": "attestation.js",
+  "repository": "https://github.com/byteball/real-name-attestation.git",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,13 +12,14 @@
   "dependencies": {
     "async": "^2.5.0",
     "body-parser": "^1.18.2",
-    "ocore": "git+https://github.com/byteball/ocore.git",
+    "ejs": "^3.1.5",
     "express": "^4.16.2",
     "headless-obyte": "git+https://github.com/byteball/headless-obyte.git",
-    "obyte-witness": "git+https://github.com/byteball/obyte-witness.git",
     "i18n-iso-countries": "^3.3.0",
     "maxmind": "^2.4.0",
     "moment": "^2.18.1",
+    "obyte-witness": "git+https://github.com/byteball/obyte-witness.git",
+    "ocore": "git+https://github.com/byteball/ocore.git",
     "request": "^2.81.0"
   }
 }
