@@ -8,7 +8,7 @@ const headlessWallet = require('headless-obyte');
 
 async function reclaim() {
 	const device = require('ocore/device.js');
-	const address = await headlessWallet.issueOrSelectAddressByIndex(0, 1);
+	const address = await headlessWallet.issueOrSelectAddressByIndex(0, 2);
 	console.error(`=== dist address`, address);
 	const rows = await db.query(
 		`SELECT contract_address, SUM(amount) AS total 
@@ -31,7 +31,7 @@ async function reclaim() {
 		const addresses_chunk = contract_addresses.splice(0, 16);
 		if (addresses_chunk.length === 0) {
 			console.error(`no more addresses left`);
-			process.exit();
+			break;
 		}
 		console.error(`will reclaim from`, addresses_chunk);
 		opts.paying_addresses = addresses_chunk;
