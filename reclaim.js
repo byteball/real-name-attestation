@@ -2,6 +2,7 @@
 "use strict";
 
 const db = require('ocore/db');
+const eventBus = require('ocore/event_bus.js');
 const headlessWallet = require('headless-obyte');
 
 
