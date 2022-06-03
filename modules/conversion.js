@@ -35,7 +35,7 @@ eventBus.once('headless_wallet_ready', () => {
 });
 
 function checkRatesAndHeadless(){
-	if (bRatesReady && bHeadlessReady)
+	if ((bRatesReady || network.exchangeRates.GBYTE_USD) && bHeadlessReady)
 		eventBus.emit('headless_and_rates_ready');
 }
 
