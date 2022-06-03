@@ -7,11 +7,15 @@ const eventBus = require('ocore/event_bus.js');
 const network = require('ocore/network.js');
 const notifications = require('./notifications');
 
-/*
-var GBYTE_BTC_rate;
-var BTC_USD_rate;
+//var GBYTE_BTC_rate;
+//var BTC_USD_rate;
 
 var bRatesReady = false;
+eventBus.once('rates_updated', () => {
+	bRatesReady = true;
+	checkRatesAndHeadless();
+});
+/*
 function checkAllRatesUpdated(){
 	if (bRatesReady)
 		return;
@@ -22,6 +26,7 @@ function checkAllRatesUpdated(){
 		checkRatesAndHeadless();
 	}
 }
+*/
 
 var bHeadlessReady = false;
 eventBus.once('headless_wallet_ready', () => {
@@ -35,7 +40,7 @@ function checkRatesAndHeadless(){
 }
 
 
-
+/*
 function updateBittrexRates(){
 	console.log('updating bittrex');
 	const apiUri = 'https://bittrex.com/api/v1.1/public/getmarketsummaries';
