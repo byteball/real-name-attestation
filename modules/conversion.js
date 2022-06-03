@@ -4,9 +4,10 @@ const async = require('async');
 const request = require('request');
 const conf = require('ocore/conf');
 const eventBus = require('ocore/event_bus.js');
+const network = require('ocore/network.js');
 const notifications = require('./notifications');
 
-
+/*
 var GBYTE_BTC_rate;
 var BTC_USD_rate;
 
@@ -65,19 +66,22 @@ function updateBittrexRates(){
 		}
 	});
 }
+*/
 
 function getPriceInBytes(priceInUSD){
-	if (!bRatesReady)
+	const rates = network.exchangeRates;
+	if (!rates.GBYTE_USD)
 		throw Error("rates not ready yet");
-	return Math.round(1e9 * priceInUSD / (GBYTE_BTC_rate * BTC_USD_rate));
+	return Math.round(1e9 * priceInUSD / rates.GBYTE_USD);
 }
-
+/*
 function enableRateUpdates(){
 	setInterval(updateBittrexRates, 600*1000);
 }
 
 updateBittrexRates();
 enableRateUpdates();
+*/
 
 exports.getPriceInBytes = getPriceInBytes;
 
