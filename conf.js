@@ -84,4 +84,4 @@ exports.discounts = {
 // set this in conf.json
 exports.salt = null;
 
-exports.webPort = 8080;
+exports.webPort = 8090;
