@@ -181,11 +181,11 @@ exports.previousAttestationFailed = () => {
 
 exports.pleaseDonate = () => {
 	let amount = (conf.donationInUSD).toLocaleString([], {minimumFractionDigits: 2});
-	return "You now have an option to donate $"+amount+" to the Obyte Community Fund. The donation is used to pay for initiatives to increase adoption. The donation will be made from the undistributed funds on behalf of you. Your decision will not affect your reward. Do you wish to donate $"+amount+"? \n\n[Yes](command:donate yes)\t[No](command:donate no)\n\nSee https://medium.com/byteball/distribution-to-verified-users-and-referrals-episode-ii-29b6f1cd4ecc to learn what donations are used for.";
+	return "You now have an option to donate $"+amount+" to the Obyte Community Fund. The donation is used to pay for initiatives to increase adoption. The donation will be made from the undistributed funds on behalf of you. Your decision will not affect your reward. Do you wish to donate $"+amount+"? \n\n[Yes](command:donate yes)\t[No](command:donate no)\n\nSee https://blog.obyte.org/distribution-to-verified-users-and-referrals-episode-ii-29b6f1cd4ecc to learn what donations are used for.";
 };
 
 exports.referredNewUser = (reward_text) => {
-	return "You referred a user who has just verified his identity "+reward_text+". Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!";
+	return "You referred a user who has just verified their identity "+reward_text+". Thank you for bringing in a new obyter, the value of the ecosystem grows with each new user!";
 }
 
 //errors
