@@ -129,11 +129,16 @@ function displayProvider(service_provider){
 	let jumioSelected = service_provider === 'jumio' ? exports.selectedOption() : '';
 	let veriffSelected = service_provider === 'veriff' ? exports.selectedOption() : '';
 	let smartidSelected = service_provider === 'eideasy' ? exports.selectedOption() : '';
+
+	let jumioPrice = conf.priceInUSD.toLocaleString([], {minimumFractionDigits: 2});
+	let veriffPrice = conf.priceInUSDforVeriff.toLocaleString([], {minimumFractionDigits: 2});
+	let smartidPrice = conf.priceInUSDforSmartID.toLocaleString([], { minimumFractionDigits: 2 });
+
 	let display_providers = 'Currently selected attestation service provider';
 
-	display_providers += (!conf.apiJumioToken || !conf.apiJumioSecret) ? '' : `\n* [Jumio Netverify](command:jumio) ${jumioSelected}`;
-	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n* [Veriff](command:veriff) ${veriffSelected}`;
-	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n* [eID Easy](command:eideasy) ${smartidSelected}`;
+	display_providers += (!conf.apiJumioToken || !conf.apiJumioSecret) ? '' : `\n* [Jumio Netverify](command:jumio): $${jumioPrice} ${jumioSelected}`;
+	display_providers += (!conf.apiVeriffPublicKey || !conf.apiVeriffPrivateKey) ? '' : `\n* [Veriff](command:veriff): $${veriffPrice} ${veriffSelected}`;
+	display_providers += (!conf.apiSmartIdToken || !conf.apiSmartIdSecret) ? '' : `\n* [eID Easy](command:eideasy): $${smartidPrice} ${smartidSelected}`;
 
 	return display_providers;
 }
@@ -147,10 +152,10 @@ exports.pleasePay = (receiving_address, price, user_address, objDiscountedPriceI
 		throw Error("price missing");
 	let text = `Click to pay: [attestation payment](${pairingProtocol}${receiving_address}?amount=${price}&single_address=single${user_address})`;
 	if (!have_attestation)
-		text += ` or, if you have a smart voucher, insert it below.`;
+		text += ` or, if you have a smart voucher, insert it below`;
 	if (objDiscountedPriceInUSD && objDiscountedPriceInUSD.discount)
 		text += ` (you were given a ${objDiscountedPriceInUSD.discount}% discount as a ${objDiscountedPriceInUSD.domain} user with ${objDiscountedPriceInUSD.field} over ${objDiscountedPriceInUSD.threshold_value})`;
-	text += ".";
+	text += ". The payment is nonrefundable even if the attestation fails for any reason.";
 	return text;
 };
 
