@@ -55,6 +55,8 @@ exports.apiSmartIdSecret = '';
 exports.apiSmartIdCallback = 'https://oid.one/done';
 exports.apiSmartIdRedirect = 'https://oid.one/smartid';
 
+exports.defaultServiceProvider = 'veriff'; // null to allow choice
+
 exports.priceInUSD = 8;
 exports.priceInUSDforVeriff = 8;
 exports.priceInUSDforSmartID = 0.5;

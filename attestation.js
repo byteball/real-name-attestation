@@ -40,11 +40,11 @@ function readUserInfo(device_address, cb) {
 		if (rows.length)
 			cb(rows[0]);
 		else {
-			db.query("INSERT "+db.getIgnore()+" INTO users (device_address) VALUES(?)", [device_address], () => {
+			db.query("INSERT "+db.getIgnore()+" INTO users (device_address, service_provider) VALUES(?,?)", [device_address, conf.defaultServiceProvider], () => {
 				cb({
 					device_address: device_address,
 					user_address: null,
-					service_provider: null
+					service_provider: conf.defaultServiceProvider,
 				});
 			});
 		}
