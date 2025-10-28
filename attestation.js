@@ -4,6 +4,7 @@ const constants = require('ocore/constants.js');
 const conf = require('ocore/conf');
 const db = require('ocore/db');
 const eventBus = require('ocore/event_bus.js');
+const device = require('ocore/device.js');
 const texts = require('./modules/texts.js');
 const db_migrations = require('./db_migrations.js');
 const db_migrations2 = require('./db_migrations2.js');
